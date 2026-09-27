@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-27
+
 ### Added
 
 - `AppIntervention`: the core of a "pause before you open it" intervention driven by a
