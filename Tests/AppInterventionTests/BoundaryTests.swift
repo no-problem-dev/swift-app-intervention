@@ -43,7 +43,11 @@ struct BoundaryTests {
 
     @Test("M24 / E-S5: 20 concurrent resolutions of one context — exactly one succeeds")
     func concurrentResolve() async throws {
-        let c = InterventionCoordinator.inMemory(catalog: StaticGuardedAppCatalog([Fixture.instagram]), policy: { InterventionPolicy() }, clock: clock)
+        // Reads are slowed down so unserialized resolutions would all read before any writes.
+        let c = InterventionCoordinator(
+            catalog: StaticGuardedAppCatalog([Fixture.instagram]), policy: { InterventionPolicy() },
+            passes: InMemoryPassStore(), log: SlowReadLog(), handoff: InMemoryInterventionHandoff(), clock: clock
+        )
         let context = InterventionContext(app: Fixture.instagram, requestedAt: clock.now, tier: .standard, reason: .fallback)
         let results = await withTaskGroup(of: InterventionError.Code?.self) { group in
             for i in 0..<20 {
@@ -124,5 +128,15 @@ struct BoundaryTests {
             Issue.record("expected validPass"); return
         }
         #expect(try fresh().events(in: nil).map(\.kind.rawValue) == ["opened", "intervened", "proceeded", "passedThrough", "opened", "passedThrough"])
+    }
+}
+
+/// A log whose reads take a few milliseconds, to widen race windows.
+final class SlowReadLog: OpenLogStore {
+    let inner = InMemoryOpenLogStore()
+    func append(_ event: OpenEvent) throws(InterventionError) { try inner.append(event) }
+    func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] {
+        Thread.sleep(forTimeInterval: 0.005)
+        return try inner.events(in: interval)
     }
 }

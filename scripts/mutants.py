@@ -8,8 +8,8 @@ HEAD under .build/mutants-worktree with a fixed --scratch-path, so the working c
 touched and builds stay incremental between mutants. Every mutant gets a 60 s budget; a hang
 counts as killed (and is reported, because a hang means an unbounded test).
 
-A mutant whose snippet no longer matches is reported STALE: update the list with the code.
-Exit status is non-zero when any mutant survives or is stale.
+A mutant whose snippet no longer matches is reported STALE, and one that does not compile is
+INVALID: fix the list. Exit status is non-zero when any mutant survives, is stale or is invalid.
 Commit your changes first: the worktree is built from HEAD.
 """
 import pathlib, re, subprocess, sys, time
@@ -69,7 +69,9 @@ MUTANTS = [
      "try await continuation.continueInForeground()"),
     ("M24", "resolve not serialized", C, "        resolutionLock.lock()\n        defer { resolutionLock.unlock() }\n", "\n"),
     ("M25", "absence not clipped at end", S, "min(t, endsAt).timeIntervalSince", "t.timeIntervalSince"),
-    ("M27", "log read failure ignored", C, "recent = try log.events(in:", "recent = (try? log.events(in:"),
+    ("M27", "log read failure ignored", C,
+     "recent = try log.events(in: DateInterval(start: now.addingTimeInterval(-opensLookback.timeInterval), end: now.addingTimeInterval(1)))",
+     "recent = (try? log.events(in: DateInterval(start: now.addingTimeInterval(-opensLookback.timeInterval), end: now.addingTimeInterval(1)))) ?? []"),
     ("M29", "no-URL proceed keeps the window", P,
      "        guard !urls.isEmpty else {\n            try? coordinator.consumeReturnWindow(appID: context.app.id)",
      "        guard !urls.isEmpty else {\n            _ = 0"),
@@ -124,10 +126,10 @@ def main():
         print(r.stderr); return 2
     try:
         status, took, _ = test(WORKTREE)
-        print(f"baseline: {status} ({took:.0f}s)", flush=True)
+        print(f"baseline: {'PASS' if status == 'SURVIVED' else status} ({took:.0f}s)", flush=True)
         if status != "SURVIVED":
             print("baseline must pass"); return 2
-        survived = stale = 0
+        survived = stale = invalid = 0
         for key, name, rel, old, new in MUTANTS:
             if only and key not in only:
                 continue
@@ -144,12 +146,14 @@ def main():
                 path.write_text(original)
             if status == "SURVIVED":
                 survived += 1
+            if status == "COMPILE-ERROR":
+                invalid += 1
             label = "KILLED" if status == "HANG" else status
             note = " (by hang: find the unbounded test)" if status == "HANG" else ""
             print(f"{key} {label:<13}{name} {took:.0f}s{note} {detail[:2] if detail else ''}", flush=True)
         total = len([m for m in MUTANTS if not only or m[0] in only])
-        print(f"\n{total - survived - stale}/{total} killed, {survived} survived, {stale} stale")
-        return 1 if survived or stale else 0
+        print(f"\n{total - survived - stale - invalid}/{total} killed, {survived} survived, {stale} stale, {invalid} invalid (does not compile)")
+        return 1 if survived or stale or invalid else 0
     finally:
         run(["git", "worktree", "remove", "--force", str(WORKTREE)], ROOT)
 
