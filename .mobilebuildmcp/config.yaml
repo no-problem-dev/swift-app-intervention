@@ -1,0 +1,10 @@
+schemaVersion: 1
+sentryDisabled: true
+showTestTiming: true
+sessionDefaults:
+  projectPath: Examples/InterventionSample/InterventionSample.xcodeproj
+  scheme: InterventionSample
+  configuration: Debug
+  simulatorName: iPhone 17e
+  derivedDataPath: .build/sample
+  bundleId: dev.noproblem.appintervention.InterventionSample
