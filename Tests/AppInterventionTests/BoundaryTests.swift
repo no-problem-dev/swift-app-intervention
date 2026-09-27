@@ -46,27 +46,36 @@ struct BoundaryTests {
         // The log's reads meet at a barrier: without serialization both resolutions read an
         // empty log before either writes, and both would succeed. With it, the first reader
         // waits out the barrier alone, writes, and the second sees the first's event.
-        let log = BarrierReadLog(parties: 2, timeout: 0.3)
+        // Two dedicated threads, not the cooperative pool: under a full parallel test run the
+        // pool can be busy enough to start the second task only after the first finished.
+        let log = BarrierReadLog(parties: 2, timeout: 1)
         let c = InterventionCoordinator(
             catalog: StaticGuardedAppCatalog([Fixture.instagram]), policy: { InterventionPolicy() },
             passes: InMemoryPassStore(), log: log, handoff: InMemoryInterventionHandoff(), clock: clock
         )
         let context = InterventionContext(app: Fixture.instagram, requestedAt: clock.now, tier: .standard, reason: .fallback)
-        let results = await withTaskGroup(of: InterventionError.Code?.self) { group in
-            for choice in [InterventionResolution.proceed(optionID: "pay", passDuration: .seconds(60)), .abandon(optionID: "skip")] {
-                group.addTask { () -> InterventionError.Code? in
-                    do throws(InterventionError) {
-                        try c.resolve(context, choice)
-                        return nil
-                    } catch {
-                        return error.code
-                    }
+        let choices: [InterventionResolution] = [.proceed(optionID: "pay", passDuration: .seconds(60)), .abandon(optionID: "skip")]
+        let collected = ResultBox()
+        let done = DispatchGroup()
+        for choice in choices {
+            done.enter()
+            Thread {
+                do throws(InterventionError) {
+                    try c.resolve(context, choice)
+                    collected.append(nil)
+                } catch {
+                    collected.append(error.code)
                 }
-            }
-            var all: [InterventionError.Code?] = []
-            while let result = await group.next() { all.append(result) }
-            return all
+                done.leave()
+            }.start()
         }
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                done.wait()
+                continuation.resume()
+            }
+        }
+        let results = collected.values
         #expect(results.filter { $0 == nil }.count == 1)
         #expect(results.filter { $0 == InterventionError.Code.alreadyResolved }.count == 1)
     }
@@ -185,4 +194,11 @@ final class BarrierReadLog: OpenLogStore, @unchecked Sendable {
         condition.unlock()
         return try inner.events(in: interval)
     }
+}
+
+final class ResultBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _values: [InterventionError.Code?] = []
+    func append(_ value: InterventionError.Code?) { lock.withLock { _values.append(value) } }
+    var values: [InterventionError.Code?] { lock.withLock { _values } }
 }
