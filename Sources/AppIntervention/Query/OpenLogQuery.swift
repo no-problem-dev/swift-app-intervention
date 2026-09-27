@@ -2,8 +2,11 @@ import Foundation
 
 /// The number of events on one (host-defined) day.
 public struct DayCount: Sendable, Hashable {
+    /// The host day.
     public let day: DateInterval
+    /// Events on that day.
     public let count: Int
+    /// Creates a day count.
     public init(day: DateInterval, count: Int) {
         self.day = day
         self.count = count
@@ -18,10 +21,12 @@ public struct DayCount: Sendable, Hashable {
 public struct OpenLogQuery: Sendable {
     /// The events, ascending by date.
     public let events: [OpenEvent]
+    /// The calendar and time zone days are computed in.
     public let calendar: Calendar
     /// Where the host's day starts after midnight (0 ..< 24 h).
     public let dayStartOffset: Duration
 
+    /// Creates a query over `events` (any order).
     public init(_ events: [OpenEvent], calendar: Calendar = .current, dayStartOffset: Duration = .zero) {
         self.events = events.sorted { $0.date < $1.date }
         self.calendar = calendar

@@ -43,6 +43,7 @@ public final class InterventionInbox {
 
     @ObservationIgnored private let handoff: any InterventionHandoff
     @ObservationIgnored private let clock: any InterventionClock
+    /// Contexts older than this are dropped.
     @ObservationIgnored public let maxAge: Duration
 
     /// - Parameters:
@@ -98,6 +99,7 @@ public final class InterventionInbox {
 public final class InterventionPresenter {
     /// Result of ``proceed(optionID:passDuration:onResolved:)``.
     public struct ProceedResult: Sendable, Hashable {
+        /// How returning to the app went.
         public enum Reopen: Sendable, Hashable {
             case reopened(URL)
             /// The app has no reopen URL; ask the user to switch back.
@@ -105,19 +107,25 @@ public final class InterventionPresenter {
             /// Every URL was refused; ask the user to switch back.
             case failed
         }
+        /// The recorded resolution.
         public let receipt: ResolutionReceipt
+        /// Whether the app was reopened.
         public let reopen: Reopen
 
+        /// Creates a result.
         public init(receipt: ResolutionReceipt, reopen: Reopen) {
             self.receipt = receipt
             self.reopen = reopen
         }
     }
 
+    /// Records resolutions.
     @ObservationIgnored public let coordinator: InterventionCoordinator
+    /// Holds the pending intervention.
     public let inbox: InterventionInbox
     @ObservationIgnored private let reopener: any AppReopener
 
+    /// Creates a presenter. Use `SystemAppReopener()` on iOS.
     public init(coordinator: InterventionCoordinator, inbox: InterventionInbox, reopener: any AppReopener) {
         self.coordinator = coordinator
         self.inbox = inbox
@@ -131,10 +139,13 @@ public final class InterventionPresenter {
     /// reopen URLs in order. When nothing reopens, the return window is consumed so a later
     /// manual open is counted.
     ///
-    /// - Parameter onResolved: Runs synchronously right after the resolution is recorded and
-    ///   **before** the other app is opened. Book the cost in your ledger here: once the other
-    ///   app is in front, this process may be suspended or terminated. If the process dies
-    ///   anyway, reconcile from `proceeded` events by `contextID`.
+    /// - Parameters:
+    ///   - optionID: The host option the user chose (recorded in the log).
+    ///   - passDuration: How long the app may be used without another pause.
+    ///   - onResolved: Runs synchronously right after the resolution is recorded and
+    ///     **before** the other app is opened. Book the cost in your ledger here: once the other
+    ///     app is in front, this process may be suspended or terminated. If the process dies
+    ///     anyway, reconcile from `proceeded` events by `contextID`.
     public func proceed(
         optionID: String,
         passDuration: Duration,

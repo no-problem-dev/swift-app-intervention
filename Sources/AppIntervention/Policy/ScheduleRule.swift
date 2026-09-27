@@ -24,9 +24,12 @@ public struct TimeOfDay: Sendable, Hashable, Codable, Comparable {
 /// - `start > end` wraps past midnight; the weekday filter then applies to the day the window
 ///   *started* (a Sunday 23:00–01:00 window matches Monday 00:30).
 public struct DailyWindow: Sendable, Hashable, Codable {
+    /// Inclusive start.
     public var start: TimeOfDay
+    /// Exclusive end.
     public var end: TimeOfDay
 
+    /// Creates a window.
     public init(start: TimeOfDay, end: TimeOfDay) {
         self.start = start
         self.end = end
@@ -34,6 +37,7 @@ public struct DailyWindow: Sendable, Hashable, Codable {
 
     public static let allDay = DailyWindow(start: TimeOfDay(hour: 0), end: TimeOfDay(hour: 0))
 
+    /// Whether `date` falls in the window, on one of `weekdays` (of the day the window started).
     public func contains(_ date: Date, weekdays: Set<Locale.Weekday>? = nil, calendar: Calendar) -> Bool {
         let parts = calendar.dateComponents([.hour, .minute], from: date)
         let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
@@ -84,13 +88,16 @@ public struct ScheduleRule: InterventionRule, Hashable, Codable {
     }
 
     public let id: String
+    /// When the rule applies.
     public var window: DailyWindow
     /// `nil` = every day.
     public var weekdays: Set<Locale.Weekday>?
     /// `nil` = every guarded app.
     public var appIDs: Set<GuardedApp.ID>?
+    /// What the rule does inside the window.
     public var effect: Effect
 
+    /// Creates a schedule rule.
     public init(id: String, window: DailyWindow, weekdays: Set<Locale.Weekday>? = nil, appIDs: Set<GuardedApp.ID>? = nil, effect: Effect) {
         self.id = id
         self.window = window
@@ -99,6 +106,7 @@ public struct ScheduleRule: InterventionRule, Hashable, Codable {
         self.effect = effect
     }
 
+    /// Applies the effect inside the window.
     public func evaluate(_ input: RuleInput) -> RuleVerdict? {
         if let appIDs, !appIDs.contains(input.app.id) { return nil }
         guard window.contains(input.now, weekdays: weekdays, calendar: input.calendar) else { return nil }

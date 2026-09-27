@@ -25,7 +25,7 @@ What the session can see, and how it decides:
 
 ```swift
 let controller = PhoneDownSessionController(
-    store: try FilePhoneDownSessionStore(location: .applicationSupport),
+    store: FilePhoneDownSessionStore(location: .applicationSupport),
     guardedOpens: CoordinatorGuardedOpenSource(Intervention.coordinator)
 )
 try controller.start(duration: .seconds(3_600))
@@ -39,6 +39,7 @@ try controller.start(duration: .seconds(3_600))
 
 - ``PhoneDownSession``
 - ``PhoneDownEvent``
+- ``DeviceSignal``
 - ``PhoneDownOutcome``
 - ``PhoneDownCapability``
 - ``PhoneDownSessionController``
@@ -47,6 +48,7 @@ try controller.start(duration: .seconds(3_600))
 
 - ``PhoneDownEventSource``
 - ``ManualPhoneDownEventSource``
+- ``UIKitPhoneDownEventSource``
 - ``GuardedOpenSource``
 - ``CoordinatorGuardedOpenSource``
 - ``ManualGuardedOpenSource``

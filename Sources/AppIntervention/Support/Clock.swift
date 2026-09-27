@@ -3,6 +3,7 @@ import Synchronization
 
 /// The source of "now". Injected everywhere so decisions are reproducible in tests.
 public protocol InterventionClock: Sendable {
+    /// The current instant.
     var now: Date { get }
 }
 
@@ -16,14 +17,18 @@ public struct SystemClock: InterventionClock {
 public final class ManualClock: InterventionClock {
     private let current: Mutex<Date>
 
+    /// Creates a clock stopped at `start`.
     public init(_ start: Date = Date(timeIntervalSince1970: 1_800_000_000)) {
         current = Mutex(start)
     }
 
+    /// The instant the clock is stopped at.
     public var now: Date { current.withLock { $0 } }
 
+    /// Moves the clock to `date`.
     public func set(_ date: Date) { current.withLock { $0 = date } }
 
+    /// Moves the clock forward by `duration`.
     public func advance(by duration: Duration) {
         current.withLock { $0 = $0.addingTimeInterval(duration.timeInterval) }
     }

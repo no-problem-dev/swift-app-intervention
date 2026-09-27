@@ -3,7 +3,9 @@ import SwiftUI
 /// One step of the automation setup guide.
 public struct AutomationSetupStep: Identifiable {
     public let id: Int
+    /// What to do.
     public let text: Text
+    /// Creates a step; `id` is its number.
     public init(id: Int, text: Text) {
         self.id = id
         self.text = text
@@ -32,6 +34,7 @@ public struct AutomationSetupGuideView: View {
         self.footer = footer
     }
 
+    /// The built-in, localized steps.
     public static func defaultSteps(hostAppName: String, actionName: String) -> [AutomationSetupStep] {
         [
             Text("Open the Shortcuts app and go to the Automation tab.", bundle: .module),

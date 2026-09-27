@@ -100,6 +100,7 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
 
 /// A full-width button for the pause screen's actions.
 public struct InterventionActionButton: View {
+    /// How strongly the button is drawn.
     public enum Prominence: Sendable, Hashable { case primary, secondary }
 
     @Environment(\.interventionTheme) private var theme

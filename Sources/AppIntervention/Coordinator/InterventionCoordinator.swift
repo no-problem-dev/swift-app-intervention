@@ -5,14 +5,23 @@ import Foundation
 /// Build one in the composition root as a lightweight static that depends only on files: the
 /// intent can run in a process launched in the background, before any scene or heavy SDK exists.
 public final class InterventionCoordinator: Sendable {
+    /// Resolves app ids.
     public let catalog: any GuardedAppCatalog
+    /// Where passes live.
     public let passes: any PassStore
+    /// The open log.
     public let log: any OpenLogStore
+    /// Carries pending interventions to the UI; give it to ``InterventionInbox``.
     public let handoff: any InterventionHandoff
+    /// Host state for rules.
     public let hostConditions: any HostConditionProvider
+    /// The source of "now".
     public let clock: any InterventionClock
+    /// How long after "proceed" the next run counts as the host's own reopen.
     public let returnWindow: Duration
+    /// How much of the log rules see.
     public let opensLookback: Duration
+    /// How long a run waits for host conditions before passing through.
     public let hostConditionsTimeout: Duration
     private let policy: @Sendable () -> InterventionPolicy
     private let resolutionLock = NSLock()

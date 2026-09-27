@@ -9,6 +9,7 @@ import Observation
 /// grant rewards idempotently by ``PhoneDownOutcome/sessionID``.
 @MainActor @Observable
 public final class PhoneDownSessionController {
+    /// The current (or last unacknowledged) session.
     public private(set) var session: PhoneDownSession?
 
     @ObservationIgnored private let store: any PhoneDownSessionStore
@@ -18,6 +19,7 @@ public final class PhoneDownSessionController {
     @ObservationIgnored private let broadcaster = Broadcaster<PhoneDownOutcome>()
     @ObservationIgnored private var emitted: UUID?
 
+    /// Creates a controller. `tickInterval` paces ``run(events:)``'s time signal.
     public init(
         store: any PhoneDownSessionStore,
         guardedOpens: any GuardedOpenSource,
@@ -44,12 +46,14 @@ public final class PhoneDownSessionController {
         emitted = nil
     }
 
+    /// Gives up the running session.
     public func cancel() {
         guard var current = session else { return }
         current.cancel(at: clock.now)
         commit(current)
     }
 
+    /// Applies one event, persists, and publishes a terminal outcome.
     public func handle(_ event: PhoneDownEvent) {
         guard var current = session, !current.phase.isTerminal else { return }
         current.handle(event)

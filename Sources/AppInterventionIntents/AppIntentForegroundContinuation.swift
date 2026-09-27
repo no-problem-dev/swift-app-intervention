@@ -23,9 +23,12 @@ public enum InterventionIntentDefaults {
 
 /// How the adapter reads the intent's current mode. Pure, so it is tested without the runtime.
 public struct ForegroundModeState: Sendable, Hashable {
+    /// The intent already runs in the foreground.
     public let isForeground: Bool
+    /// The system allows continuing in the foreground.
     public let canContinueInForeground: Bool
 
+    /// Creates a state.
     public init(isForeground: Bool, canContinueInForeground: Bool) {
         self.isForeground = isForeground
         self.canContinueInForeground = canContinueInForeground
@@ -38,7 +41,9 @@ public struct ForegroundModeState: Sendable, Hashable {
 }
 
 public struct AppIntentForegroundContinuation<Intent: AppIntent>: ForegroundContinuation {
+    /// The running intent.
     public let intent: Intent
+    /// Shown if the system asks for confirmation.
     public let dialog: IntentDialog?
     /// Defaults to ``InterventionIntentDefaults/alwaysConfirm`` (`false`).
     public let alwaysConfirm: Bool

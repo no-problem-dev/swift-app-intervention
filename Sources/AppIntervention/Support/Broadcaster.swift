@@ -7,6 +7,7 @@ import Synchronization
 public final class Broadcaster<Element: Sendable>: Sendable {
     private let continuations = Mutex<[UUID: AsyncStream<Element>.Continuation]>([:])
 
+    /// Creates a broadcaster with no subscribers.
     public init() {}
 
     /// A new subscriber stream. `replaying` values are delivered to this subscriber first.

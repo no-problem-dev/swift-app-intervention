@@ -22,13 +22,18 @@ public enum InterventionResolution: Sendable, Hashable {
 public struct ResolutionReceipt: Sendable, Hashable {
     /// The intervention's id — the ledger's idempotency key.
     public let contextID: UUID
+    /// The guarded app.
     public let appID: GuardedApp.ID
+    /// The tier of the intervention.
     public let tier: InterventionTier
+    /// What the user chose.
     public let resolution: InterventionResolution
+    /// When it was recorded.
     public let resolvedAt: Date
     /// The pass granted by ``InterventionResolution/proceed(optionID:passDuration:)``.
     public let pass: Pass?
 
+    /// Creates a receipt. The coordinator makes these; hosts build them in tests.
     public init(contextID: UUID, appID: GuardedApp.ID, tier: InterventionTier, resolution: InterventionResolution, resolvedAt: Date, pass: Pass?) {
         self.contextID = contextID
         self.appID = appID
@@ -41,10 +46,12 @@ public struct ResolutionReceipt: Sendable, Hashable {
 
 /// What one automation run did.
 public struct AutomationRunOutcome: Sendable, Hashable {
+    /// What the run decided.
     public let decision: InterventionDecision
     /// From the start of the run to the decision. Useful device-gate evidence for launch latency.
     public let elapsed: Duration
 
+    /// Creates an outcome.
     public init(decision: InterventionDecision, elapsed: Duration) {
         self.decision = decision
         self.elapsed = elapsed
@@ -63,6 +70,7 @@ public protocol ForegroundContinuation: Sendable {
     var isForeground: Bool { get }
     /// The system allows moving to the foreground from here.
     var canContinueInForeground: Bool { get }
+    /// Brings the host app forward. Throws when the system refuses.
     func continueInForeground() async throws
 }
 
@@ -83,6 +91,7 @@ public struct StubForegroundContinuation: ForegroundContinuation {
         public init() {}
     }
 
+    /// What the stub does.
     public let behavior: Behavior
     private let onContinue: @Sendable () -> Void
 
@@ -94,9 +103,12 @@ public struct StubForegroundContinuation: ForegroundContinuation {
         self.onContinue = onContinue
     }
 
+    /// `true` for ``Behavior/alreadyForeground``.
     public var isForeground: Bool { behavior == .alreadyForeground }
+    /// `true` for ``Behavior/succeed`` and ``Behavior/fail``.
     public var canContinueInForeground: Bool { behavior == .succeed || behavior == .fail }
 
+    /// Calls `onContinue`, then throws for ``Behavior/fail``.
     public func continueInForeground() async throws {
         onContinue()
         if behavior == .fail { throw Failure() }

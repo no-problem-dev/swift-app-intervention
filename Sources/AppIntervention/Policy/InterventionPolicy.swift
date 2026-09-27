@@ -10,6 +10,7 @@ import Foundation
 /// 4. The first rule, in order, with any verdict.
 /// 5. ``fallback``.
 public struct InterventionPolicy: Sendable {
+    /// What happens when no rule has an opinion.
     public enum Fallback: Sendable, Hashable {
         case intervene(InterventionTier)
         case passThrough
@@ -25,6 +26,7 @@ public struct InterventionPolicy: Sendable {
     /// ``OpenCountRule`` counts the same "today" as `OpenCountSummaryView(dayStartOffset:)`.
     public var dayStartOffset: Duration
 
+    /// Creates a policy.
     public init(
         rules: [any InterventionRule] = [], fallback: Fallback = .intervene(.standard),
         calendar: Calendar = .current, dayStartOffset: Duration = .zero

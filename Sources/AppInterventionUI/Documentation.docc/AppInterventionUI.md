@@ -35,3 +35,7 @@ rather than chaining it with other presenters on one view.
 ### Styling
 
 - ``InterventionTheme``
+
+### Returning to the app
+
+- ``SystemAppReopener``

@@ -9,6 +9,7 @@ import Synchronization
 /// is one small file operation. Implementations must be safe from any thread; file-backed ones
 /// also across processes.
 public protocol PassStore: Sendable {
+    /// Every stored pass, including expired ones not yet removed.
     func allPasses() throws(InterventionError) -> [Pass]
     /// Atomic read-modify-write for one app. Returning `nil` from `transform` removes the pass.
     @discardableResult
@@ -16,14 +17,17 @@ public protocol PassStore: Sendable {
 }
 
 extension PassStore {
+    /// The pass for `appID`, if any.
     public func pass(for appID: GuardedApp.ID) throws(InterventionError) -> Pass? {
         try allPasses().first { $0.appID == appID }
     }
 
+    /// Stores `pass`, replacing any pass for the same app.
     public func save(_ pass: Pass) throws(InterventionError) {
         try update(appID: pass.appID) { _ in pass }
     }
 
+    /// Removes the pass for `appID`.
     public func removePass(for appID: GuardedApp.ID) throws(InterventionError) {
         try update(appID: appID) { _ in nil }
     }
@@ -43,6 +47,7 @@ extension PassStore {
 public final class InMemoryPassStore: PassStore {
     private let passes = Mutex<[GuardedApp.ID: Pass]>([:])
 
+    /// Creates a store holding `initial`.
     public init(_ initial: [Pass] = []) {
         passes.withLock { store in for pass in initial { store[pass.appID] = pass } }
     }
@@ -65,6 +70,7 @@ public final class InMemoryPassStore: PassStore {
 
 /// The append-only open log. Retention is the implementation's business.
 public protocol OpenLogStore: Sendable {
+    /// Appends one event.
     func append(_ event: OpenEvent) throws(InterventionError)
     /// Events in ascending date order, limited to `[interval.start, interval.end)` when given.
     func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent]
@@ -74,6 +80,7 @@ public protocol OpenLogStore: Sendable {
 public final class InMemoryOpenLogStore: OpenLogStore {
     private let storage = Mutex<[OpenEvent]>([])
 
+    /// Creates a log holding `initial`.
     public init(_ initial: [OpenEvent] = []) {
         storage.withLock { $0 = initial }
     }
@@ -106,6 +113,7 @@ public enum HandoffChange: Sendable, Hashable {
 
 /// One slot carrying the pending intervention from the intent to the host UI.
 public protocol InterventionHandoff: Sendable {
+    /// Replaces the pending context with `context` and announces ``HandoffChange/posted(_:)``.
     func post(_ context: InterventionContext) throws(InterventionError)
     /// Removes and returns the pending context. Returns `nil` when there is none or it is older
     /// than `maxAge` (a pause screen for an open from ten minutes ago would be wrong).
@@ -140,6 +148,7 @@ public final class InMemoryInterventionHandoff: InterventionHandoff {
     private let slot = Mutex<InterventionContext?>(nil)
     private let broadcaster = Broadcaster<HandoffChange>()
 
+    /// Creates an empty handoff.
     public init() {}
 
     public func post(_ context: InterventionContext) throws(InterventionError) {

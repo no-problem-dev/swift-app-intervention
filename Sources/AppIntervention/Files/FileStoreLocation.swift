@@ -46,7 +46,9 @@ public enum FileStoreLocation: Sendable, Hashable {
 
 /// A resolved ``FileStoreLocation``.
 public struct ResolvedFileStoreLocation: Sendable, Hashable {
+    /// The directory the stores write to.
     public let directory: URL
+    /// Whether writes are coordinated with other processes.
     public let crossProcess: Bool
 
     package func file(_ name: String) -> CoordinatedFile {

@@ -41,8 +41,11 @@ public struct OpenEvent: Identifiable, Sendable, Hashable, Codable {
     }
 
     public let id: UUID
+    /// The guarded app.
     public let appID: GuardedApp.ID
+    /// What happened.
     public let kind: Kind
+    /// When it happened.
     public let date: Date
     /// Set for `intervened`, `proceeded`, `abandoned`.
     public let tier: InterventionTier?

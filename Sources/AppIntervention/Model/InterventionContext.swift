@@ -25,6 +25,7 @@ public struct LockReason: Sendable, Hashable, Codable {
     /// Optional extra text, already localized by the host.
     public let detail: String?
 
+    /// Creates a lock reason.
     public init(id: String, detail: String? = nil) {
         self.id = id
         self.detail = detail
@@ -35,11 +36,16 @@ public struct LockReason: Sendable, Hashable, Codable {
 public struct InterventionContext: Identifiable, Sendable, Hashable, Codable {
     /// Unique per intervention. Use it as the idempotency key when booking costs in the host's ledger.
     public let id: UUID
+    /// The app the user was opening.
     public let app: GuardedApp
+    /// When the automation run decided to intervene.
     public let requestedAt: Date
+    /// The strictness chosen by the policy.
     public let tier: InterventionTier
+    /// Why the policy intervened.
     public let reason: InterventionReason
 
+    /// Creates a context. The coordinator makes these; hosts build them in tests and previews.
     public init(id: UUID = UUID(), app: GuardedApp, requestedAt: Date, tier: InterventionTier, reason: InterventionReason) {
         self.id = id
         self.app = app
@@ -70,6 +76,7 @@ public enum InterventionDecision: Sendable, Hashable {
     case passThrough(PassThroughReason)
     case intervene(InterventionContext)
 
+    /// Whether this decision shows the pause screen.
     public var isIntervention: Bool {
         if case .intervene = self { return true }
         return false

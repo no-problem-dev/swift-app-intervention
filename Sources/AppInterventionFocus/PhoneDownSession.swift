@@ -39,6 +39,7 @@ public struct PhoneDownSession: Identifiable, Sendable, Hashable, Codable {
         /// What an unconfirmed absence longer than ``grace`` means. Default ``AbsencePolicy/fail``.
         public var unconfirmedAbsence: AbsencePolicy
 
+        /// Creates a configuration.
         public init(grace: Duration = .seconds(15), lockSignalWindow: Duration = .seconds(30), unconfirmedAbsence: AbsencePolicy = .fail) {
             self.grace = grace
             self.lockSignalWindow = lockSignalWindow
@@ -56,12 +57,16 @@ public struct PhoneDownSession: Identifiable, Sendable, Hashable, Codable {
 
     /// The app is in the background.
     public struct Away: Sendable, Hashable, Codable {
+        /// When the app went to the background (or the grace period restarted).
         public var since: Date
+        /// A lock signal confirmed this absence.
         public var lockConfirmed: Bool
         /// The background task expired before a lock signal arrived.
         public var undetermined: Bool
+        /// A call was active during this absence.
         public var duringCall: Bool
 
+        /// Creates an absence.
         public init(since: Date, lockConfirmed: Bool = false, undetermined: Bool = false, duringCall: Bool = false) {
             self.since = since
             self.lockConfirmed = lockConfirmed
@@ -70,17 +75,20 @@ public struct PhoneDownSession: Identifiable, Sendable, Hashable, Codable {
         }
     }
 
+    /// Where the session is.
     public enum Phase: Sendable, Hashable, Codable {
         case running(away: Away?)
         case succeeded(at: Date)
         case failed(FailureReason)
 
+        /// `true` once succeeded or failed.
         public var isTerminal: Bool {
             if case .running = self { return false }
             return true
         }
     }
 
+    /// Why a session failed.
     public enum FailureReason: Sendable, Hashable, Codable {
         /// Away without a lock since `since`, longer than the grace period.
         case leftApp(since: Date, undetermined: Bool)
@@ -90,12 +98,18 @@ public struct PhoneDownSession: Identifiable, Sendable, Hashable, Codable {
     }
 
     public let id: UUID
+    /// When the session started.
     public let startedAt: Date
+    /// When the session succeeds if nothing fails it.
     public let endsAt: Date
+    /// How absences are judged.
     public let configuration: Configuration
+    /// The current phase.
     public private(set) var phase: Phase
+    /// Whether a call is active.
     public private(set) var inCall: Bool
 
+    /// A running session from `date` for `duration`.
     public static func start(id: UUID = UUID(), at date: Date, duration: Duration, configuration: Configuration = .init()) -> PhoneDownSession {
         PhoneDownSession(
             id: id, startedAt: date, endsAt: date.addingTimeInterval(duration.timeInterval),
@@ -112,12 +126,14 @@ public struct PhoneDownSession: Identifiable, Sendable, Hashable, Codable {
         }
     }
 
+    /// Fails the session as cancelled (the user gave up).
     public mutating func cancel(at date: Date) {
         guard !phase.isTerminal else { return }
         phase = .failed(.cancelled(at: date))
     }
 
     @discardableResult
+    /// Applies one event and returns the new phase. Terminal phases ignore everything.
     public mutating func handle(_ event: PhoneDownEvent) -> Phase {
         guard case .running(var away) = phase else { return phase }
 
@@ -221,16 +237,22 @@ public struct PhoneDownSession: Identifiable, Sendable, Hashable, Codable {
 
 /// The terminal result of a session. Use ``sessionID`` as the idempotency key for rewards.
 public struct PhoneDownOutcome: Sendable, Hashable, Codable {
+    /// Success or the reason for failure.
     public enum Result: Sendable, Hashable, Codable {
         case succeeded(at: Date)
         case failed(PhoneDownSession.FailureReason)
     }
 
+    /// The session — the reward's idempotency key.
     public let sessionID: UUID
+    /// When the session started.
     public let startedAt: Date
+    /// When it was due to end.
     public let endsAt: Date
+    /// How it ended.
     public let result: Result
 
+    /// Whether the session succeeded.
     public var succeeded: Bool {
         if case .succeeded = result { return true }
         return false

@@ -6,13 +6,17 @@ import Foundation
 /// home-screen launch from the host reopening the app after "proceed", so the host grants a
 /// pass *before* reopening and the next automation run passes through.
 public struct Pass: Sendable, Hashable, Codable {
+    /// The app this pass opens.
     public let appID: GuardedApp.ID
+    /// When the pass was granted.
     public let grantedAt: Date
+    /// The first instant the pass no longer applies.
     public let expiresAt: Date
     /// While `now < returnWindowEndsAt`, the next automation run is the host's own reopen:
     /// it passes through without being counted as an open, and consumes the window.
     public var returnWindowEndsAt: Date?
 
+    /// Creates a pass. `returnWindowEndsAt` is set by ``InterventionCoordinator/resolve(_:_:)`` for proceed.
     public init(appID: GuardedApp.ID, grantedAt: Date, expiresAt: Date, returnWindowEndsAt: Date? = nil) {
         self.appID = appID
         self.grantedAt = grantedAt

@@ -21,7 +21,7 @@ looping.
 
 ```swift
 enum Intervention {
-    static let coordinator = try! InterventionCoordinator.files(
+    static let coordinator = InterventionCoordinator.files(   // never throws
         at: .applicationSupport,
         catalog: StaticGuardedAppCatalog(apps),
         policy: { InterventionPolicy(rules: [nightRule], fallback: .intervene(.standard)) }
@@ -79,7 +79,7 @@ The automation path never throws and never traps the user: storage failures pass
 - ``StaticGuardedAppCatalog``
 - ``ClosureGuardedAppCatalog``
 - ``HostConditionProvider``
-- ``HostConditions``
+- ``ClosureHostConditionProvider``
 - ``NoHostConditions``
 - ``HostSnapshot``
 
@@ -94,6 +94,8 @@ The automation path never throws and never traps the user: storage failures pass
 - ``PassStore``
 - ``OpenLogStore``
 - ``InterventionHandoff``
+- ``HandoffChange``
+- ``Broadcaster``
 - ``FileStoreLocation``
 - ``ResolvedFileStoreLocation``
 - ``FilePassStore``

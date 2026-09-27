@@ -41,3 +41,5 @@ Why the host target:
 
 - ``AppIntents/AppIntent/runIntervention(appID:coordinator:dialog:alwaysConfirm:)``
 - ``AppIntentForegroundContinuation``
+- ``ForegroundModeState``
+- ``InterventionIntentDefaults``

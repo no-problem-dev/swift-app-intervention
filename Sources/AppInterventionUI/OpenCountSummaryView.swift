@@ -9,6 +9,7 @@ public struct OpenCountSummaryView: View {
     private let total: Int
     private let hours: [Int]
 
+    /// Summarizes `events` of `kind` on the host day containing `now`.
     public init(
         events: [OpenEvent], kind: OpenEvent.Kind = .opened, calendar: Calendar = .current,
         dayStartOffset: Duration = .zero, now: Date = .now

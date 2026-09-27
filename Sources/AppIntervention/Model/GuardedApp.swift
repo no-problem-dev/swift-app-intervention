@@ -19,6 +19,7 @@ public struct GuardedApp: Identifiable, Sendable, Hashable, Codable {
     /// When the list is empty or every URL fails, the UI asks the user to switch back.
     public var reopenURLs: [URL]
 
+    /// Creates a guarded app.
     public init(id: String, displayName: String, bundleIdentifier: String? = nil, reopenURLs: [URL] = []) {
         self.id = id
         self.displayName = displayName
