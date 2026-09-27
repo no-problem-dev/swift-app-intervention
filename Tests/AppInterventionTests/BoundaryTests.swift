@@ -166,8 +166,8 @@ struct BoundaryTests {
     }
 }
 
-/// A log whose reads wait at a barrier until `parties` readers have arrived (or `timeout`
-/// elapses), so concurrent readers are guaranteed to overlap without relying on timing luck.
+/// A log whose reads take their snapshot, then wait at a barrier until `parties` readers have
+/// arrived (or `timeout` elapses), so concurrent readers are guaranteed to see the same state.
 final class BarrierReadLog: OpenLogStore, @unchecked Sendable {
     let inner = InMemoryOpenLogStore()
     private let condition = NSCondition()
@@ -183,6 +183,9 @@ final class BarrierReadLog: OpenLogStore, @unchecked Sendable {
     func append(_ event: OpenEvent) throws(InterventionError) { try inner.append(event) }
 
     func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] {
+        // Read first, then wait: every reader that overlaps returns what it saw before anyone
+        // could write, whichever thread wakes first after the barrier.
+        let snapshot = try inner.events(in: interval)
         condition.lock()
         arrived += 1
         if arrived >= parties {
@@ -192,7 +195,7 @@ final class BarrierReadLog: OpenLogStore, @unchecked Sendable {
             while arrived < parties, condition.wait(until: deadline) {}
         }
         condition.unlock()
-        return try inner.events(in: interval)
+        return snapshot
     }
 }
 
