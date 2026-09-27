@@ -174,6 +174,10 @@ InterventionPauseView(context: context) {
 If the process dies between recording and booking anyway, reconcile the ledger from
 `proceeded` / `abandoned` events by `contextID`.
 
+When the breath is over, the ring shows a raised hand. Choose another symbol, the 0.1.0 checkmark,
+or nothing with `readyIndicator:` (`.symbol("pause.fill")`, `.checkmark`, `.hidden`). A checkmark
+reads as "opened", so avoid it when the host may offer no way to open (a lock, an empty balance).
+
 `Examples/InterventionSample` is a complete host app (XcodeGen, iOS 26).
 
 ### 4. Guide the automation setup

@@ -168,6 +168,10 @@ InterventionPauseView(context: context) {
 
 記録してから台帳に書くまでの間にプロセスが終わった場合は、`proceeded` / `abandoned` の記録を `contextID` で突き合わせて台帳を直す。
 
+ひと呼吸が終わると、円の中に手のひらのマークが出る。`readyIndicator:` でほかの記号・0.1.0 のチェックマーク・何も出さない、を選べる
+（`.symbol("pause.fill")`・`.checkmark`・`.hidden`）。チェックマークは「開いた」と読まれるので、
+開く選択肢を出さないことがある（ロック・残高が足りない）ホストでは使わない。
+
 完全な見本は `Examples/InterventionSample`（XcodeGen・iOS 26）。
 
 ### 4. 自動化の設定を案内する

@@ -65,6 +65,11 @@ let package = Package(
             path: "Tests/AppInterventionFocusTests"
         ),
         .testTarget(
+            name: "AppInterventionUITests",
+            dependencies: ["AppInterventionUI", "AppIntervention"],
+            path: "Tests/AppInterventionUITests"
+        ),
+        .testTarget(
             name: "AppInterventionIntentsTests",
             dependencies: ["AppInterventionIntents", "AppIntervention"],
             path: "Tests/AppInterventionIntentsTests"

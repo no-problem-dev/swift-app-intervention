@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `AppInterventionUI`: `InterventionPauseView(readyIndicator:)` and `PauseReadyIndicator`
+  (`.pause`, `.checkmark`, `.hidden`, `.symbol(_:)`) choose what the countdown ring shows once the
+  breath is over. Existing call sites compile unchanged.
+
+### Changed
+
+- `InterventionPauseView` now shows a neutral raised hand (`hand.raised.fill`) when the pause is
+  over instead of a checkmark, which read as "done" or "opened" even when the host offered no way
+  to open. Pass `readyIndicator: .checkmark` for the 0.1.0 look.
+
 ## [0.1.0] - 2026-09-27
 
 ### Added

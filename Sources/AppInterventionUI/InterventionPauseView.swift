@@ -1,6 +1,27 @@
 import AppIntervention
 import SwiftUI
 
+/// What the pause view's ring shows once the breath is over.
+///
+/// The default is a neutral raised hand: a checkmark read as "done" or "opened", even when the host
+/// offers no way to open (a lock, an empty balance).
+public struct PauseReadyIndicator: Sendable, Hashable {
+    /// The SF Symbol to show, or `nil` to show nothing.
+    public let systemName: String?
+
+    /// A custom SF Symbol.
+    public static func symbol(_ systemName: String) -> PauseReadyIndicator {
+        PauseReadyIndicator(systemName: systemName)
+    }
+
+    /// A raised hand (`hand.raised.fill`). The default.
+    public static let pause = PauseReadyIndicator(systemName: "hand.raised.fill")
+    /// A checkmark (`checkmark`), the only indicator before 0.2.0.
+    public static let checkmark = PauseReadyIndicator(systemName: "checkmark")
+    /// Nothing inside the ring.
+    public static let hidden = PauseReadyIndicator(systemName: nil)
+}
+
 /// The pause screen scaffold: the app's name, a short breathing countdown, then the host's actions.
 ///
 /// The actions are disabled until the pause elapses — the pause itself is the intervention.
@@ -14,6 +35,7 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
     private let title: Text?
     private let subtitle: Text?
     private let readyAnnouncement: String?
+    private let readyIndicator: PauseReadyIndicator
     private let content: Content
     private let actions: Actions
 
@@ -24,6 +46,7 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
     ///   - subtitle: Replaces "Take a moment."
     ///   - readyAnnouncement: What VoiceOver announces when the actions become available.
     ///     `nil` uses the built-in localized text.
+    ///   - readyIndicator: What the ring shows once the pause is over. Default ``PauseReadyIndicator/pause``.
     ///   - content: The host's body: price, balance, streak.
     ///   - actions: The host's options, usually ``InterventionActionButton``s.
     public init(
@@ -32,6 +55,7 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
         title: Text? = nil,
         subtitle: Text? = nil,
         readyAnnouncement: String? = nil,
+        readyIndicator: PauseReadyIndicator = .pause,
         @ViewBuilder content: () -> Content,
         @ViewBuilder actions: () -> Actions
     ) {
@@ -39,6 +63,7 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
         self.title = title
         self.subtitle = subtitle
         self.readyAnnouncement = readyAnnouncement
+        self.readyIndicator = readyIndicator
         self.content = content()
         self.actions = actions()
         _remaining = State(initialValue: max(0, Int(pause.timeInterval.rounded(.up))))
@@ -93,8 +118,8 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
                 Text(verbatim: "\(remaining)")
                     .font(.title.monospacedDigit())
                     .foregroundStyle(theme.primaryText)
-            } else {
-                Image(systemName: "checkmark")
+            } else if let symbol = readyIndicator.systemName {
+                Image(systemName: symbol)
                     .font(.title2.bold())
                     .foregroundStyle(theme.accent)
             }
