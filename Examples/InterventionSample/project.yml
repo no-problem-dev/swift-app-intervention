@@ -1,0 +1,36 @@
+# Sample host app. The .xcodeproj is generated: `xcodegen generate` (or `make sample`).
+name: InterventionSample
+options:
+  bundleIdPrefix: dev.noproblem.appintervention
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: en
+packages:
+  AppIntervention:
+    path: ../..
+targets:
+  InterventionSample:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    dependencies:
+      - package: AppIntervention
+        product: AppIntervention
+      - package: AppIntervention
+        product: AppInterventionIntents
+      - package: AppIntervention
+        product: AppInterventionUI
+      - package: AppIntervention
+        product: AppInterventionFocus
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Intervention Sample
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
