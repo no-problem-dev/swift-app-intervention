@@ -256,7 +256,7 @@ Design notes and the review they went through: [`docs/DESIGN.md`](docs/DESIGN.md
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/no-problem-dev/swift-app-intervention.git", .upToNextMinor(from: "0.1.0"))
+    .package(url: "https://github.com/no-problem-dev/swift-app-intervention.git", .upToNextMinor(from: "0.2.0"))
 ]
 ```
 

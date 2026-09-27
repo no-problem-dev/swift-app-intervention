@@ -243,7 +243,7 @@ API リファレンス: [no-problem-dev.github.io/swift-app-intervention](https:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/no-problem-dev/swift-app-intervention.git", .upToNextMinor(from: "0.1.0"))
+    .package(url: "https://github.com/no-problem-dev/swift-app-intervention.git", .upToNextMinor(from: "0.2.0"))
 ]
 ```
 
