@@ -12,18 +12,33 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
 
     private let context: InterventionContext
     private let title: Text?
+    private let subtitle: Text?
+    private let readyAnnouncement: String?
     private let content: Content
     private let actions: Actions
 
+    /// - Parameters:
+    ///   - context: The intervention to show.
+    ///   - pause: How long the actions stay disabled. Default three seconds.
+    ///   - title: Replaces "Before you open <App>".
+    ///   - subtitle: Replaces "Take a moment."
+    ///   - readyAnnouncement: What VoiceOver announces when the actions become available.
+    ///     `nil` uses the built-in localized text.
+    ///   - content: The host's body: price, balance, streak.
+    ///   - actions: The host's options, usually ``InterventionActionButton``s.
     public init(
         context: InterventionContext,
         pause: Duration = .seconds(3),
         title: Text? = nil,
+        subtitle: Text? = nil,
+        readyAnnouncement: String? = nil,
         @ViewBuilder content: () -> Content,
         @ViewBuilder actions: () -> Actions
     ) {
         self.context = context
         self.title = title
+        self.subtitle = subtitle
+        self.readyAnnouncement = readyAnnouncement
         self.content = content()
         self.actions = actions()
         _remaining = State(initialValue: max(0, Int(pause.timeInterval.rounded(.up))))
@@ -40,7 +55,7 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
                         .font(.title2.bold())
                         .foregroundStyle(theme.primaryText)
                         .multilineTextAlignment(.center)
-                    Text("Take a moment.", bundle: .module)
+                    (subtitle ?? Text("Take a moment.", bundle: .module))
                         .font(.body)
                         .foregroundStyle(theme.secondaryText)
                 }
@@ -54,10 +69,15 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
             .padding(24)
         }
         .task {
+            guard remaining > 0 else { return }
             while remaining > 0 {
                 try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
                 remaining -= 1
             }
+            AccessibilityNotification.Announcement(
+                readyAnnouncement ?? String(localized: "You can choose now.", bundle: .module)
+            ).post()
         }
     }
 
@@ -87,6 +107,10 @@ public struct InterventionActionButton: View {
     private let prominence: Prominence
     private let action: () -> Void
 
+    /// - Parameters:
+    ///   - title: The label.
+    ///   - prominence: `.primary` is filled with the theme's accent; `.secondary` is bordered.
+    ///   - action: Runs on tap.
     public init(_ title: Text, prominence: Prominence = .primary, action: @escaping () -> Void) {
         self.title = title
         self.prominence = prominence

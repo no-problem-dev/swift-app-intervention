@@ -248,6 +248,28 @@
           }
         }
       }
+    },
+    "You can choose now.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選べるようになりました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在可以选择了。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在可以選擇了。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
