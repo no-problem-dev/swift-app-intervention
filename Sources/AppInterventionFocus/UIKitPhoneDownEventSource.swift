@@ -25,6 +25,9 @@ public final class UIKitPhoneDownEventSource: NSObject, PhoneDownEventSource, CX
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var poller: Task<Void, Never>?
 
+    /// - Parameters:
+    ///   - clock: Timestamps events.
+    ///   - pollInterval: How often `isProtectedDataAvailable` is read while in the background.
     public init(clock: any InterventionClock = SystemClock(), pollInterval: Duration = .seconds(1)) {
         self.clock = clock
         self.pollInterval = pollInterval
@@ -38,8 +41,8 @@ public final class UIKitPhoneDownEventSource: NSObject, PhoneDownEventSource, CX
         }
         observe(UIApplication.didEnterBackgroundNotification) { $0.didEnterBackground() }
         observe(UIApplication.didBecomeActiveNotification) { $0.didBecomeActive() }
-        observe(UIApplication.protectedDataWillBecomeUnavailableNotification) { $0.lockConfirmed() }
-        observe(UIApplication.protectedDataDidBecomeAvailableNotification) { $0.emit(.unlocked($0.clock.now)) }
+        observe(UIApplication.protectedDataWillBecomeUnavailableNotification) { $0.lockConfirmed(.protectedDataWillBecomeUnavailable) }
+        observe(UIApplication.protectedDataDidBecomeAvailableNotification) { $0.signal(.protectedDataDidBecomeAvailable) }
     }
 
     isolated deinit {
@@ -49,15 +52,18 @@ public final class UIKitPhoneDownEventSource: NSObject, PhoneDownEventSource, CX
 
     public func events() -> AsyncStream<PhoneDownEvent> { broadcaster.stream() }
 
-    private func emit(_ event: PhoneDownEvent) { broadcaster.yield(event) }
+    /// Every signal goes through the pure mapping ``PhoneDownEvent/init(signal:at:)``.
+    private func signal(_ signal: DeviceSignal) {
+        if let event = PhoneDownEvent(signal: signal, at: clock.now) { broadcaster.yield(event) }
+    }
 
     private func didEnterBackground() {
-        emit(.enteredBackground(clock.now))
+        signal(.didEnterBackground)
         endBackgroundTask()
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "AppIntervention.PhoneDown") { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.emit(.backgroundTimeExpired(self.clock.now))
+                self.signal(.backgroundTaskExpired)
                 self.endBackgroundTask()
             }
         }
@@ -66,8 +72,9 @@ public final class UIKitPhoneDownEventSource: NSObject, PhoneDownEventSource, CX
             while !Task.isCancelled {
                 try? await Task.sleep(for: interval)
                 guard let self, !Task.isCancelled else { return }
-                if !UIApplication.shared.isProtectedDataAvailable {
-                    self.lockConfirmed()
+                let available = UIApplication.shared.isProtectedDataAvailable
+                if !available {
+                    self.lockConfirmed(.protectedDataPoll(available: false))
                     return
                 }
             }
@@ -76,11 +83,11 @@ public final class UIKitPhoneDownEventSource: NSObject, PhoneDownEventSource, CX
 
     private func didBecomeActive() {
         endBackgroundTask()
-        emit(.becameActive(clock.now))
+        signal(.didBecomeActive)
     }
 
-    private func lockConfirmed() {
-        emit(.lockConfirmed(clock.now))
+    private func lockConfirmed(_ source: DeviceSignal) {
+        signal(source)
         endBackgroundTask()
     }
 
@@ -95,8 +102,8 @@ public final class UIKitPhoneDownEventSource: NSObject, PhoneDownEventSource, CX
 
     public nonisolated func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
         MainActor.assumeIsolated {
-            let active = self.callObserver.calls.contains { !$0.hasEnded }
-            self.emit(.callChanged(active: active, at: self.clock.now))
+            let active = self.callObserver.calls.filter { !$0.hasEnded }.count
+            self.signal(.callsChanged(activeCalls: active))
         }
     }
 }
