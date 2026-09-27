@@ -3,7 +3,7 @@ import Charts
 import SwiftUI
 
 /// Today's opens, total and by hour. A lightweight summary; hosts with richer needs use
-/// ``OpenLogQuery`` directly.
+/// `OpenLogQuery` directly.
 public struct OpenCountSummaryView: View {
     @Environment(\.interventionTheme) private var theme
     private let total: Int

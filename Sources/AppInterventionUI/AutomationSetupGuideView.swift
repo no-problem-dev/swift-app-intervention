@@ -25,6 +25,8 @@ public struct AutomationSetupGuideView: View {
     /// - Parameters:
     ///   - hostAppName: The host app's name as Shortcuts lists it.
     ///   - actionName: The host intent's title as Shortcuts lists it.
+    ///   - steps: Replaces the built-in steps.
+    ///   - footer: Replaces the built-in note about the notification banner.
     public init(hostAppName: String, actionName: String, steps: [AutomationSetupStep]? = nil, footer: Text? = nil) {
         self.steps = steps ?? Self.defaultSteps(hostAppName: hostAppName, actionName: actionName)
         self.footer = footer

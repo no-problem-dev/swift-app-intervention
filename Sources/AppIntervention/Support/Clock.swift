@@ -31,13 +31,13 @@ public final class ManualClock: InterventionClock {
 
 extension Duration {
     /// The duration in seconds as a `TimeInterval`.
-    public var timeInterval: TimeInterval {
+    package var timeInterval: TimeInterval {
         let (seconds, attoseconds) = components
         return TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
     }
 
     /// The duration in whole milliseconds, rounded down.
-    public var milliseconds: Int64 {
+    package var milliseconds: Int64 {
         let (seconds, attoseconds) = components
         return seconds * 1_000 + attoseconds / 1_000_000_000_000_000
     }

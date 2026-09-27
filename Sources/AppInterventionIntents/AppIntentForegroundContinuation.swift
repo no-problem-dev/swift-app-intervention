@@ -1,7 +1,7 @@
 import AppIntervention
 import AppIntents
 
-/// Adapts `AppIntent.continueInForeground(_:alwaysConfirm:)` (iOS 26) to ``ForegroundContinuation``.
+/// Adapts `AppIntent.continueInForeground(_:alwaysConfirm:)` (iOS 26) to `ForegroundContinuation`.
 ///
 /// The host intent must declare, **as a literal in its own source**:
 ///
@@ -44,7 +44,7 @@ extension AppIntent {
     /// Runs one intervention from the host's intent: decide in the background, and continue in
     /// the foreground only when the pause screen must be shown.
     ///
-    /// Never throws; see ``InterventionCoordinator/handleAutomationRun(appID:continuation:)``.
+    /// Never throws; see `InterventionCoordinator/handleAutomationRun(appID:continuation:)`.
     ///
     /// ```swift
     /// func perform() async throws -> some IntentResult {

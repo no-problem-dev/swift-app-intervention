@@ -506,7 +506,7 @@ struct PauseBeforeOpeningIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         let outcome = await runIntervention(appID: app.rawValue, coordinator: Intervention.coordinator)
-        print("[SPIKE] decisionMs=\(outcome.elapsed.milliseconds)")
+        print("[SPIKE] decision=\(outcome.decision) elapsed=\(outcome.elapsed)")
         return .result()
     }
 }
@@ -753,3 +753,23 @@ App Review notes (B-C4): include setup steps and a video; state that "pay" uses 
 | B-C2 | Accepted: file protection note + 0xdead10cc warning | 4 |
 | B-C3 | Rejected for 0.1: "App is closed" timing is a separate feature; the open `Kind` set allows adding it later without a format break | 2.1 |
 | B-C4 | Accepted: App Review notes; no private notifications | 0, 10 |
+
+## 13. Implementation notes (revision 2 as built)
+
+Differences between the signatures above and the code, all additive or naming-level:
+
+- `ResolutionReceipt` also carries `appID` and `tier` (so a ledger entry needs nothing else).
+- `ProceedResult` is nested: `InterventionPresenter.ProceedResult`.
+- `FileOpenLogStore.compact()` takes no date; it uses the injected clock.
+- `OpenLogQuery.countsByDay` / `countsByHourOfDay` take an optional `appID`.
+- File stores also have `init(resolved: ResolvedFileStoreLocation)` so one resolved directory
+  is shared; `InterventionCoordinator.files(at:…)` uses it.
+- Extra conveniences: `ClosureGuardedAppCatalog`, `HostConditions` (closure provider),
+  `InterventionContext.lock`, `InterventionDecision.isIntervention`,
+  `PhoneDownSession.cancel(at:)`, `PhoneDownSessionController(tickInterval:)`.
+- `InterventionTheme` and `AutomationSetupStep` are not `Sendable` (they hold SwiftUI values).
+- `ForegroundContinuation` and `StubForegroundContinuation` live in core; `Duration` helpers
+  are `package`, not public, to avoid clashing with hosts' own extensions.
+- B-M1 was re-measured independently: the sample app's literal gives `supportedModes: 9`; the
+  same value through a public constant in `AppInterventionIntents` gives `1`, and
+  `scripts/check-intent-metadata.sh` fails on it (exit 1).

@@ -18,7 +18,13 @@ public final class InterventionCoordinator: Sendable {
     private let broadcaster = Broadcaster<OpenEvent>()
 
     /// - Parameters:
+    ///   - catalog: Resolves the app id the intent receives.
     ///   - policy: Re-read on every run, so settings changes apply immediately.
+    ///   - passes: Where passes live.
+    ///   - log: The append-only open log.
+    ///   - handoff: Carries the pending context to the host UI.
+    ///   - hostConditions: Host state for rules, fetched once per run.
+    ///   - clock: The source of "now".
     ///   - returnWindow: How long after "proceed" the next run counts as the host's own reopen.
     ///   - opensLookback: How much of the log rules see through ``RuleInput/opens``.
     public init(

@@ -47,7 +47,7 @@ public protocol GuardedOpenSource: Sendable {
     func liveOpens() -> AsyncStream<OpenEvent>
 }
 
-/// Reads guarded opens from an ``InterventionCoordinator``: its log for the past, its event
+/// Reads guarded opens from an `InterventionCoordinator`: its log for the past, its event
 /// stream for the present. The host's intent runs in the app process, so the live path is reliable.
 public struct CoordinatorGuardedOpenSource: GuardedOpenSource {
     public let coordinator: InterventionCoordinator
