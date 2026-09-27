@@ -24,7 +24,7 @@ final class FlakyLog: OpenLogStore, @unchecked Sendable {
     func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] { try inner.events(in: interval) }
 }
 
-@Suite("Adversarial")
+@Suite("Adversarial", .timeLimit(.minutes(1)))
 struct Adversarial {
     func make(clock: ManualClock, log: any OpenLogStore = InMemoryOpenLogStore(), handoff: any InterventionHandoff = InMemoryInterventionHandoff(), passes: any PassStore = InMemoryPassStore()) -> InterventionCoordinator {
         InterventionCoordinator(catalog: StaticGuardedAppCatalog([Fixture.instagram]),

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import AppIntervention
 
-@Suite("File stores")
+@Suite("File stores", .timeLimit(.minutes(1)))
 struct FileStoreTests {
     let directory = Fixture.temporaryDirectory()
     var location: FileStoreLocation { .directory(directory) }
@@ -106,12 +106,10 @@ struct FileStoreTests {
         #expect(try handoff.take(now: now.addingTimeInterval(121), maxAge: .seconds(120)) == nil)
         #expect(try contents().isEmpty)
 
-        var count = 0
-        for await _ in changes {
-            count += 1
-            if count == 3 { break }   // post, (take by another instance is silent here), post, take
-        }
-        #expect(count == 3)
+        // post, take (this instance), post, take (stale, still removed)
+        let received = await collect(changes, count: 4)
+        #expect(received == [.posted(context.id), .taken(context.id), .posted(context.id), .taken(context.id)])
+
     }
 
     // MARK: - Open log

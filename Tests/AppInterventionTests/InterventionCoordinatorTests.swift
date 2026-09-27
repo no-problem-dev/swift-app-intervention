@@ -3,7 +3,7 @@ import Synchronization
 import Testing
 @testable import AppIntervention
 
-@Suite("InterventionCoordinator")
+@Suite("InterventionCoordinator", .timeLimit(.minutes(1)))
 struct InterventionCoordinatorTests {
     let clock = ManualClock(Fixture.date(2026, 9, 27, 12))
     let passes = InMemoryPassStore()
@@ -207,11 +207,7 @@ struct InterventionCoordinatorTests {
         let c = coordinator(fallback: .passThrough)
         let stream = c.eventStream()
         _ = await c.handleAutomationRun(appID: "instagram", continuation: StubForegroundContinuation())
-        var received: [OpenEvent.Kind] = []
-        for await event in stream {
-            received.append(event.kind)
-            if received.count == 2 { break }
-        }
+        let received = await collect(stream, count: 2).map(\.kind)
         #expect(received == [.opened, .passedThrough])
     }
 

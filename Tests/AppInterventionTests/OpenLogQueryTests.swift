@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import AppIntervention
 
-@Suite("OpenLogQuery")
+@Suite("OpenLogQuery", .timeLimit(.minutes(1)))
 struct OpenLogQueryTests {
     func opened(_ date: Date, _ app: String = "instagram", kind: OpenEvent.Kind = .opened) -> OpenEvent {
         OpenEvent(appID: app, kind: kind, date: date)

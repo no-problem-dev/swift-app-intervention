@@ -22,7 +22,7 @@ private struct SamplePauseIntent: AppIntent {
     }
 }
 
-@Suite("Intents adapter")
+@Suite("Intents adapter", .timeLimit(.minutes(1)))
 struct IntentsAdapterTests {
     @Test("the host-style intent declares background + dynamic foreground")
     func modes() {
@@ -30,10 +30,29 @@ struct IntentsAdapterTests {
         #expect(SamplePauseIntent.supportedModes.contains(.foreground(.dynamic)))
     }
 
-    @Test("the adapter defaults to alwaysConfirm: false")
+    @Test("M14 / E-M2: every adapter defaults to alwaysConfirm: false")
     func defaults() {
+        #expect(InterventionIntentDefaults.alwaysConfirm == false)
         let continuation = AppIntentForegroundContinuation(SamplePauseIntent())
         #expect(continuation.alwaysConfirm == false)
         #expect(continuation.dialog == nil)
+        #expect(AppIntentForegroundContinuation(SamplePauseIntent(), alwaysConfirm: true).alwaysConfirm)
+    }
+
+    @Test("E-M2: the current mode maps to foreground / can-continue")
+    func modeMapping() {
+        let foreground = ForegroundModeState(IntentModes.Current.foreground)
+        #expect(foreground.isForeground)
+        #expect(foreground.canContinueInForeground == IntentModes.Current.foreground.canContinueInForeground)
+        let background = ForegroundModeState(IntentModes.Current.background)
+        #expect(!background.isForeground)
+        #expect(background.canContinueInForeground == IntentModes.Current.background.canContinueInForeground)
+    }
+
+    @Test("an unknown app returns before touching the intent runtime")
+    func runInterventionNotGuarded() async {
+        let coordinator = InterventionCoordinator.inMemory(catalog: StaticGuardedAppCatalog([]), policy: { InterventionPolicy() })
+        let outcome = await SamplePauseIntent().runIntervention(appID: "nope", coordinator: coordinator)
+        #expect(outcome.decision == .passThrough(.notGuarded))
     }
 }

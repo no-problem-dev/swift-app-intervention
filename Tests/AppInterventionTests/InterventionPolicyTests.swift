@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import AppIntervention
 
-@Suite("InterventionPolicy")
+@Suite("InterventionPolicy", .timeLimit(.minutes(1)))
 struct InterventionPolicyTests {
     let now = Fixture.date(2026, 9, 27, 12)
 
@@ -113,7 +113,7 @@ struct InterventionPolicyTests {
     }
 }
 
-@Suite("DailyWindow")
+@Suite("DailyWindow", .timeLimit(.minutes(1)))
 struct DailyWindowTests {
     let cal = Fixture.calendar
 

@@ -54,3 +54,23 @@ final class CountingHostConditions: HostConditionProvider, @unchecked Sendable {
         return snapshot
     }
 }
+
+/// A log whose reads and writes can be made to fail.
+final class FailingOpenLogStore: OpenLogStore, @unchecked Sendable {
+    let inner = InMemoryOpenLogStore()
+    private let lock = NSLock()
+    private var _failReads: Bool
+    private var _failWrites: Bool
+    init(failReads: Bool = false, failWrites: Bool = false) {
+        _failReads = failReads
+        _failWrites = failWrites
+    }
+    func append(_ event: OpenEvent) throws(InterventionError) {
+        if lock.withLock({ _failWrites }) { throw InterventionError(.write, file: "open-log.jsonl") }
+        try inner.append(event)
+    }
+    func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] {
+        if lock.withLock({ _failReads }) { throw InterventionError(.read, file: "open-log.jsonl") }
+        return try inner.events(in: interval)
+    }
+}

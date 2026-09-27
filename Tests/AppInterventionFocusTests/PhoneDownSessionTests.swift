@@ -6,7 +6,7 @@ import Testing
 private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 private func at(_ seconds: TimeInterval) -> Date { t0.addingTimeInterval(seconds) }
 
-@Suite("PhoneDownSession")
+@Suite("PhoneDownSession", .timeLimit(.minutes(1)))
 struct PhoneDownSessionTests {
     func session(_ minutes: Int = 60, _ configuration: PhoneDownSession.Configuration = .init()) -> PhoneDownSession {
         .start(id: UUID(), at: t0, duration: .seconds(minutes * 60), configuration: configuration)

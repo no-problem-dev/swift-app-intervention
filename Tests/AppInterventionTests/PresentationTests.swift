@@ -3,7 +3,7 @@ import Testing
 @testable import AppIntervention
 
 @MainActor
-@Suite("Inbox and presenter")
+@Suite("Inbox and presenter", .timeLimit(.minutes(1)))
 struct PresentationTests {
     let clock = ManualClock(Fixture.date(2026, 9, 27, 12))
     let passes = InMemoryPassStore()

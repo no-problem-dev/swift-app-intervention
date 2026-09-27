@@ -4,7 +4,7 @@ import Testing
 @testable import AppIntervention
 
 /// Regression tests for the 2026-09-27 code review (C-*, D-*), beyond Reviewer C's adversarial ones.
-@Suite("Code review fixes")
+@Suite("Code review fixes", .timeLimit(.minutes(1)))
 struct ReviewFixTests {
     let clock = ManualClock(Fixture.date(2026, 9, 27, 12))
 
@@ -88,11 +88,7 @@ struct ReviewFixTests {
         let context = InterventionContext(app: Fixture.instagram, requestedAt: clock.now, tier: .standard, reason: .fallback)
         try writer.post(context)
         try writer.withdraw(contextID: context.id)
-        var received: [HandoffChange] = []
-        for await change in changes {
-            received.append(change)
-            if received.count == 2 { break }
-        }
+        let received = await collect(changes, count: 2)
         #expect(received == [.posted(context.id), .withdrawn(context.id)])
         #expect(try reader.take(now: clock.now, maxAge: .seconds(60)) == nil)
     }
@@ -108,9 +104,7 @@ struct ReviewFixTests {
 
     @Test("D-S6: a custom handoff gets a finished changes() stream by default")
     func defaultChanges() async {
-        var count = 0
-        for await _ in FailingHandoff().changes() { count += 1 }
-        #expect(count == 0)
+        #expect(await collect(FailingHandoff().changes(), count: 1).isEmpty)
     }
 
     @Test("D-C2: result types can be built by hosts")
@@ -122,7 +116,7 @@ struct ReviewFixTests {
     }
 }
 
-@Suite("Day boundaries across DST (C-C2)")
+@Suite("Day boundaries across DST (C-C2)", .timeLimit(.minutes(1)))
 struct DaylightSavingTests {
     @Test("a 04:00 boundary stays at wall-clock 04:00 on the spring-forward day")
     func springForward() {
@@ -142,7 +136,7 @@ struct DaylightSavingTests {
 }
 
 @MainActor
-@Suite("Presenter review fixes")
+@Suite("Presenter review fixes", .timeLimit(.minutes(1)))
 struct PresenterReviewFixTests {
     let clock = ManualClock(Fixture.date(2026, 9, 27, 12))
 

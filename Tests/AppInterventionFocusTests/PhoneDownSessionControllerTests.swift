@@ -4,7 +4,7 @@ import Testing
 @testable import AppInterventionFocus
 
 @MainActor
-@Suite("PhoneDownSessionController")
+@Suite("PhoneDownSessionController", .timeLimit(.minutes(1)))
 struct PhoneDownSessionControllerTests {
     let clock = ManualClock(Date(timeIntervalSince1970: 1_800_000_000))
     let store = InMemoryPhoneDownSessionStore()
@@ -26,8 +26,7 @@ struct PhoneDownSessionControllerTests {
         c.handle(.tick(clock.now.addingTimeInterval(61)))
         c.handle(.tick(clock.now.addingTimeInterval(62)))
 
-        var received: [PhoneDownOutcome] = []
-        for await outcome in outcomes { received.append(outcome); break }
+        let received = await collect(outcomes, count: 1)
         #expect(received.map(\.sessionID) == [id])
         #expect(received.first?.succeeded == true)
         #expect(try store.load()?.outcome?.sessionID == id)
@@ -72,8 +71,7 @@ struct PhoneDownSessionControllerTests {
         let relaunched = controller()
         let outcomes = relaunched.outcomes()
         relaunched.resume(appIsActive: false)
-        var got: PhoneDownOutcome?
-        for await outcome in outcomes { got = outcome; break }
+        let got = await firstValue(outcomes)
         #expect(got?.result == .failed(.cancelled(at: clock.now)))
 
         relaunched.acknowledgeOutcome()
@@ -123,8 +121,7 @@ struct PhoneDownSessionControllerTests {
         let live = source.liveOpens()
         _ = await coordinator.handleAutomationRun(appID: "instagram", continuation: StubForegroundContinuation())
         #expect(try source.opens(since: clock.now.addingTimeInterval(-1)).map(\.kind) == [.opened])
-        var first: OpenEvent?
-        for await event in live { first = event; break }
+        let first = await firstValue(live)
         #expect(first?.appID == "instagram")
     }
 }
