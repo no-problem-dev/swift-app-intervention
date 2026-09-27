@@ -4,7 +4,7 @@ import SwiftUI
 
 struct PauseScreen: View {
     let context: InterventionContext
-    let inbox: InterventionInbox
+    @Environment(AppModel.self) private var model
     @State private var presenter: InterventionPresenter?
     @State private var message: String?
 
@@ -21,23 +21,31 @@ struct PauseScreen: View {
                 Task { await proceed() }
             }
             InterventionActionButton(Text("Skip and save \(Intervention.price(for: context.tier))"), prominence: .secondary) {
-                // Book the saving in your ledger keyed by receipt.contextID.
-                _ = try? makePresenter().abandon(optionID: "skip")
+                do {
+                    let receipt = try makePresenter().abandon(optionID: "skip")
+                    // Book the saving in your ledger keyed by receipt.contextID (idempotent).
+                    print("[SPIKE] saved contextID=\(receipt.contextID)")
+                } catch {
+                    message = "\(error)"
+                }
             }
         }
     }
 
     private func makePresenter() -> InterventionPresenter {
         if let presenter { return presenter }
-        let made = InterventionPresenter(coordinator: Intervention.coordinator, inbox: inbox, reopener: SystemAppReopener())
+        let made = model.makePresenter()
         presenter = made
         return made
     }
 
     private func proceed() async {
         do {
-            let result = try await makePresenter().proceed(optionID: "pay", passDuration: .seconds(15 * 60))
-            // Charge in your ledger keyed by result.receipt.contextID (idempotent).
+            let result = try await makePresenter().proceed(optionID: "pay", passDuration: .seconds(15 * 60)) { receipt in
+                // Charge here, before the other app comes forward and this process may be suspended.
+                // Key the ledger entry by receipt.contextID so a retry cannot charge twice.
+                print("[SPIKE] charged contextID=\(receipt.contextID)")
+            }
             if result.reopen == .failed || result.reopen == .noURL {
                 message = "Switch back to \(context.app.displayName) yourself."
             }

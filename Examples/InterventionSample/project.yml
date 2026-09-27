@@ -28,6 +28,10 @@ targets:
       properties:
         CFBundleDisplayName: Intervention Sample
         UILaunchScreen: {}
+        # DEBUG-only QA entry points (interventionsample://qa/...); release builds ignore them.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.noproblem.appintervention.sample.qa
+            CFBundleURLSchemes: [interventionsample]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
     settings:

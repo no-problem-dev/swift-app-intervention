@@ -21,7 +21,7 @@ struct PauseBeforeOpeningIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         let outcome = await runIntervention(appID: app.rawValue, coordinator: Intervention.coordinator)
-        print("[SPIKE] app=\(app.rawValue) intervene=\(outcome.decision.isIntervention) decisionMs=\(outcome.elapsed.components.seconds * 1_000 + outcome.elapsed.components.attoseconds / 1_000_000_000_000_000)")
+        print("[SPIKE] app=\(app.rawValue) intervene=\(outcome.decision.isIntervention) decisionMs=\(outcome.elapsedMilliseconds)")
         return .result()
     }
 }

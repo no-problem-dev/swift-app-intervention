@@ -22,18 +22,16 @@ enum Intervention {
         fallback: .intervene(.standard)
     )
 
-    static let coordinator: InterventionCoordinator = {
-        let catalog = StaticGuardedAppCatalog(apps)
-        do {
-            return try .files(at: .applicationSupport, catalog: catalog, policy: { policy })
-        } catch {
-            // Never trap the user: without storage, interventions still work for this process.
-            return InterventionCoordinator(
-                catalog: catalog, policy: { policy },
-                passes: InMemoryPassStore(), log: InMemoryOpenLogStore(), handoff: InMemoryInterventionHandoff()
-            )
-        }
-    }()
+    /// Never throws: an unusable location makes runs pass through instead of crashing the intent.
+    /// The wall clock, or a manual one under `-qa-now` (DEBUG).
+    static let clock: any InterventionClock = QA.clock
+
+    static let coordinator = InterventionCoordinator.files(
+        at: .applicationSupport,
+        catalog: StaticGuardedAppCatalog(apps),
+        policy: { policy },
+        clock: clock
+    )
 
     static func price(for tier: InterventionTier) -> Int {
         tier == "strict" ? 200 : 50
