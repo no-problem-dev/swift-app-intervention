@@ -3,20 +3,21 @@
 
     usage: scripts/mutants.py [M01 M02 ...]      (make mutants)
 
-Each mutant replaces one exact snippet in a source file. The run happens in a git worktree of
-HEAD under .build/mutants-worktree with a fixed --scratch-path, so the working copy is never
-touched and builds stay incremental between mutants. Every mutant gets a 60 s budget; a hang
+Each mutant replaces one exact snippet in a source file. The run happens in git worktrees of
+HEAD under .build/mutants-worktree-<n>, each with its own fixed --scratch-path
+(.build/mutants-scratch-<n>), so the working copy is never touched and builds stay incremental
+between mutants. MUTANT_WORKERS (default 2) worktrees run side by side. Every mutant gets a 60 s budget; a hang
 counts as killed (and is reported, because a hang means an unbounded test).
 
 A mutant whose snippet no longer matches is reported STALE, and one that does not compile is
 INVALID: fix the list. Exit status is non-zero when any mutant survives, is stale or is invalid.
 Commit your changes first: the worktree is built from HEAD.
 """
-import pathlib, re, subprocess, sys, time
+import os, pathlib, re, subprocess, sys, threading, time
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-WORKTREE = ROOT / ".build" / "mutants-worktree"
-SCRATCH = ROOT / ".build" / "mutants-scratch"
+WORKERS = int(os.environ.get("MUTANT_WORKERS", "2"))
 TIMEOUT = 60
 
 C = "Sources/AppIntervention/Coordinator/InterventionCoordinator.swift"
@@ -105,10 +106,10 @@ def run(cmd, cwd, timeout=None):
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
 
 
-def test(cwd):
+def test(cwd, scratch):
     start = time.time()
     try:
-        r = run(["swift", "test", "--scratch-path", str(SCRATCH)], cwd, TIMEOUT)
+        r = run(["swift", "test", "--scratch-path", str(scratch)], cwd, TIMEOUT)
     except subprocess.TimeoutExpired:
         return "HANG", time.time() - start, []
     out = r.stdout + r.stderr
@@ -120,42 +121,67 @@ def test(cwd):
 
 def main():
     only = set(sys.argv[1:])
-    run(["git", "worktree", "remove", "--force", str(WORKTREE)], ROOT)
-    r = run(["git", "worktree", "add", "--detach", str(WORKTREE), "HEAD"], ROOT)
-    if r.returncode != 0:
-        print(r.stderr); return 2
+    selected = [m for m in MUTANTS if not only or m[0] in only]
+    workers = [(ROOT / ".build" / f"mutants-worktree-{i}", ROOT / ".build" / f"mutants-scratch-{i}") for i in range(max(1, WORKERS))]
+    for tree, _ in workers:
+        run(["git", "worktree", "remove", "--force", str(tree)], ROOT)
+        r = run(["git", "worktree", "add", "--detach", str(tree), "HEAD"], ROOT)
+        if r.returncode != 0:
+            print(r.stderr); return 2
+    lock = threading.Lock()
+    counts = {"survived": 0, "stale": 0, "invalid": 0}
     try:
-        status, took, _ = test(WORKTREE)
-        print(f"baseline: {'PASS' if status == 'SURVIVED' else status} ({took:.0f}s)", flush=True)
-        if status != "SURVIVED":
-            print("baseline must pass"); return 2
-        survived = stale = invalid = 0
-        for key, name, rel, old, new in MUTANTS:
-            if only and key not in only:
-                continue
-            path = WORKTREE / rel
-            original = path.read_text()
-            if original.count(old) != 1:
-                print(f"{key} STALE        {name} (snippet found {original.count(old)}×)", flush=True)
-                stale += 1
-                continue
-            path.write_text(original.replace(old, new, 1))
+        with ThreadPoolExecutor(len(workers)) as pool:
+            baselines = list(pool.map(lambda w: test(*w), workers))
+        for (status, took, _) in baselines:
+            print(f"baseline: {'PASS' if status == 'SURVIVED' else status} ({took:.0f}s)", flush=True)
+            if status != "SURVIVED":
+                print("baseline must pass"); return 2
+
+        free = list(workers)
+        free_lock = threading.Condition()
+
+        def one(mutant):
+            key, name, rel, old, new = mutant
+            with free_lock:
+                while not free:
+                    free_lock.wait()
+                tree, scratch = free.pop()
             try:
-                status, took, detail = test(WORKTREE)
+                path = tree / rel
+                original = path.read_text()
+                if original.count(old) != 1:
+                    with lock:
+                        counts["stale"] += 1
+                        print(f"{key} STALE        {name} (snippet found {original.count(old)}×)", flush=True)
+                    return
+                path.write_text(original.replace(old, new, 1))
+                try:
+                    status, took, detail = test(tree, scratch)
+                finally:
+                    path.write_text(original)
+                with lock:
+                    if status == "SURVIVED":
+                        counts["survived"] += 1
+                    if status == "COMPILE-ERROR":
+                        counts["invalid"] += 1
+                    label = "KILLED" if status == "HANG" else status
+                    note = " (by hang: find the unbounded test)" if status == "HANG" else ""
+                    print(f"{key} {label:<13}{name} {took:.0f}s{note} {detail[:2] if detail else ''}", flush=True)
             finally:
-                path.write_text(original)
-            if status == "SURVIVED":
-                survived += 1
-            if status == "COMPILE-ERROR":
-                invalid += 1
-            label = "KILLED" if status == "HANG" else status
-            note = " (by hang: find the unbounded test)" if status == "HANG" else ""
-            print(f"{key} {label:<13}{name} {took:.0f}s{note} {detail[:2] if detail else ''}", flush=True)
-        total = len([m for m in MUTANTS if not only or m[0] in only])
-        print(f"\n{total - survived - stale - invalid}/{total} killed, {survived} survived, {stale} stale, {invalid} invalid (does not compile)")
-        return 1 if survived or stale or invalid else 0
+                with free_lock:
+                    free.append((tree, scratch))
+                    free_lock.notify()
+
+        with ThreadPoolExecutor(len(workers)) as pool:
+            list(pool.map(one, selected))
+        total = len(selected)
+        bad = counts["survived"] + counts["stale"] + counts["invalid"]
+        print(f"\n{total - bad}/{total} killed, {counts['survived']} survived, {counts['stale']} stale, {counts['invalid']} invalid (does not compile)")
+        return 1 if bad else 0
     finally:
-        run(["git", "worktree", "remove", "--force", str(WORKTREE)], ROOT)
+        for tree, _ in workers:
+            run(["git", "worktree", "remove", "--force", str(tree)], ROOT)
 
 
 if __name__ == "__main__":

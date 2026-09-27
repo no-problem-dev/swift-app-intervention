@@ -4,9 +4,9 @@ import Testing
 @testable import AppInterventionFocus
 
 @MainActor
-@Suite("AdversarialFocus", .timeLimit(.minutes(1)))
+@Suite("Adversarial (focus): regressions from code review", .timeLimit(.minutes(1)))
 struct AdversarialFocus {
-    @Test("outcome re-emitted by resume() before outcomes() subscription is lost")
+    @Test("C-S5: a subscriber that starts after resume() still receives the unacknowledged outcome")
     func replayLost() async throws {
         let clock = ManualClock()
         var s = PhoneDownSession.start(at: clock.now, duration: .seconds(60))

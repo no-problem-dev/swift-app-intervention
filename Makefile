@@ -28,7 +28,7 @@ help:
 	@echo "  make check-metadata  sample build + supportedModes == 9                         ~30s"
 	@echo "  make docs            DocC for iOS, no warnings allowed, into ./_site             ~30s"
 	@echo "  make mutants         mutation run in a git worktree (commit first)              ~3min"
-	@echo "  make qa              simulator QA pass with screenshots (.build/qa-shots)       ~90s"
+	@echo "  make qa              simulator QA: en flow + ja light/dark (.build/qa-shots)    ~2min"
 	@echo "  make verify          build, test, build-ios, check-metadata, docs"
 
 build:
@@ -57,7 +57,7 @@ mutants:
 	@$(call timed,3min) scripts/mutants.py $(MUTANTS)
 
 qa:
-	@$(call timed,90s) QA_SIM="$(QA_SIM)" scripts/qa-sample.sh
+	@$(call timed,120s) QA_SIM="$(QA_SIM)" scripts/qa-sample.sh
 
 verify: build test build-ios check-metadata docs
 

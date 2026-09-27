@@ -201,6 +201,22 @@ your process). Locking is confirmed through protected-data signals; an absence n
 confirmed is judged by `unconfirmedAbsence` (`.fail` by default; consider `.tolerate` when
 `PhoneDownCapability.current == .lockUndetectable`).
 
+## Localization: declare the languages in your app
+
+The package's own UI text ships in English, Japanese, Simplified and Traditional Chinese, but
+**iOS only uses a language that the host app declares.** An app that declares only English
+shows the package's screens in English on a Japanese device. Declare all four in the app's
+Info.plist (and let Xcode list them as known regions, e.g. by localizing one resource):
+
+```yaml
+# XcodeGen
+info:
+  properties:
+    CFBundleLocalizations: [en, ja, zh-Hans, zh-Hant]
+```
+
+Every built-in string can also be replaced through the views' parameters.
+
 ## Limitations
 
 - **It cannot block.** The user can dismiss the pause, or disable or delete the automation, and

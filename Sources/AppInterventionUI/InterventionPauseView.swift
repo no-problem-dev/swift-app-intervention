@@ -89,9 +89,15 @@ public struct InterventionPauseView<Content: View, Actions: View>: View {
                 .stroke(theme.accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: remaining)
-            Text(remaining > 0 ? "\(remaining)" : "")
-                .font(.title.monospacedDigit())
-                .foregroundStyle(theme.primaryText)
+            if remaining > 0 {
+                Text(verbatim: "\(remaining)")
+                    .font(.title.monospacedDigit())
+                    .foregroundStyle(theme.primaryText)
+            } else {
+                Image(systemName: "checkmark")
+                    .font(.title2.bold())
+                    .foregroundStyle(theme.accent)
+            }
         }
         .frame(width: 88, height: 88)
         .accessibilityHidden(true)

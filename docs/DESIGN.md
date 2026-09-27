@@ -836,3 +836,12 @@ DEBUG-only QA entry points in the sample (launch arguments, `interventionsample:
 `[QA]` line per action, State tab) and `make qa`. The iOS 26 Simulator asks "Open in …?" for
 every URL sent with `simctl openurl`, which blocks an unattended run, so `make qa` passes the same
 commands with `-qa-script`; the URL scheme stays for manual use.
+
+## 15. QA round (2026-09-27, conditional GO)
+
+| Finding | Change |
+|---|---|
+| Localization not observable | The sample declares `CFBundleLocalizations` (en, ja, zh-Hans, zh-Hant) and localizes its display name (known regions). README (en/ja) and DocC state that the host must declare the languages. `make qa` adds Japanese light and dark passes of the setup guide and pause screen. |
+| M24 flaky under `make mutants` | The resolve test now meets at a barrier (`BarrierReadLog`, an `NSCondition` with a timeout), so without serialization both reads overlap every time. `make mutants` runs two worktrees side by side. |
+| Identical QA screenshots | Pass-through steps show the State tab, pauses show the pause screen (standard and strict tier), the phone-down result is a labelled line on its own tab; the first screenshot waits for `[QA] ready`. The QA budget is 2 min: three launches (en flow, ja light, ja dark). |
+| Adversarial test names | Renamed to the behaviour they assert. |

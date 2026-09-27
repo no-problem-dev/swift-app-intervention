@@ -193,6 +193,21 @@ try controller.start(duration: .seconds(3_600))
 ロックは保護データの通知で確認する。何も確認できなかった不在は `unconfirmedAbsence` で判定する
 （既定は `.fail`。`PhoneDownCapability.current == .lockUndetectable` のときは `.tolerate` を検討する）。
 
+## 多言語表示: 言語はホストアプリで宣言する
+
+パッケージの画面の文言は英語・日本語・簡体字・繁体字で入っているが、**iOS はホストアプリが宣言した言語しか使わない。**
+英語だけを宣言したアプリでは、日本語の端末でもパッケージの画面が英語で表示される。
+アプリの Info.plist で 4 言語を宣言する（Xcode の既知の地域にも載るよう、どれか 1 つのリソースを多言語化しておく）。
+
+```yaml
+# XcodeGen
+info:
+  properties:
+    CFBundleLocalizations: [en, ja, zh-Hans, zh-Hant]
+```
+
+組み込みの文言は、どれもビューの引数で差し替えられる。
+
 ## できないこと
 
 - **止めることはできない。** 利用者は立ち止まりを閉じられるし、自動化を切ることも消すこともでき、アプリからは分からない。

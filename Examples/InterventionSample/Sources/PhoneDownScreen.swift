@@ -27,7 +27,10 @@ struct PhoneDownScreen: View {
                     .buttonStyle(.borderedProminent)
                 }
                 if let outcome = model.lastOutcome {
-                    Text(outcome.succeeded ? "Done: reward earned" : "Session failed")
+                    Label(outcome.succeeded ? "Done: reward earned" : "Session failed: \(failureText(outcome))",
+                          systemImage: outcome.succeeded ? "checkmark.seal.fill" : "xmark.octagon.fill")
+                        .font(.title3.bold())
+                        .foregroundStyle(outcome.succeeded ? .green : .red)
                     Button("OK") {
                         controller.acknowledgeOutcome()
                         model.lastOutcome = nil
@@ -36,6 +39,15 @@ struct PhoneDownScreen: View {
             }
             .padding()
             .navigationTitle("Phone down")
+        }
+    }
+
+    private func failureText(_ outcome: PhoneDownOutcome) -> String {
+        guard case .failed(let reason) = outcome.result else { return "" }
+        switch reason {
+        case .leftApp: return "left the app"
+        case .openedGuardedApp(let appID, _): return "opened \(appID)"
+        case .cancelled: return "gave up"
         }
     }
 }

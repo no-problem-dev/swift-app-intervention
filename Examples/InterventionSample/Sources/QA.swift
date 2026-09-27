@@ -20,6 +20,7 @@ import MachO
 ///   resolve?choice=pay|skip                                  resolve the pending pause
 ///   pass?app=instagram&sec=60                                grant a pass
 ///   advance?dt=60                                            move the manual clock
+///   now?iso=2026-09-27T13:30:00Z                             set the manual clock
 ///   pd?event=start|bg|active|lock|unlock|expire|call1|call0|guarded|cancel&dt=+N&sec=N&app=…
 ///   tab?name=setup|opens|pd|state
 ///
@@ -66,6 +67,10 @@ enum QA {
 
     @MainActor
     static func startIfRequested(_ model: AppModel) async {
+        guard isEnabled else { return }
+        // First frame is on screen: the QA script waits for this before its first screenshot.
+        try? await Task.sleep(for: .milliseconds(300))
+        print("[QA] ready buildUUID=\(buildUUID)")
         if let seconds = value(after: "-qa-pd-seconds").flatMap(Int.init) {
             try? model.phoneDown.start(duration: .seconds(seconds))
             log("launch-pd", decision: "-", model: model)
@@ -131,6 +136,10 @@ enum QA {
             _ = try? Intervention.coordinator.grantPass(appID: app, duration: .seconds(seconds))
         case "advance":
             break
+        case "now":
+            if let iso = query("iso"), let date = ISO8601DateFormatter().date(from: iso) {
+                (clock as? ManualClock)?.set(date)
+            }
         case "pd":
             let now = clock.now
             switch query("event") {

@@ -57,5 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     types, `AutomationRunOutcome.elapsedMilliseconds`, `InterventionPauseView(subtitle:readyAnnouncement:)`.
   - Renamed `HostConditions` to `ClosureHostConditionProvider`; `AppReopener` no longer
     requires a class.
+- The sample declares its four languages, and the README and DocC explain that a host must
+  declare them too (`CFBundleLocalizations`), or the package's localized UI stays English.
 - Public enums (`PassThroughReason`, `InterventionReason`, `InterventionDecision`,
   `PhoneDownEvent`, …) may gain cases in 0.x minor versions; switch over them with a `default:`.

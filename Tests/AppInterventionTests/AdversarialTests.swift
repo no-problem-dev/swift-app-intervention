@@ -24,7 +24,7 @@ final class FlakyLog: OpenLogStore, @unchecked Sendable {
     func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] { try inner.events(in: interval) }
 }
 
-@Suite("Adversarial", .timeLimit(.minutes(1)))
+@Suite("Adversarial: regressions from code review", .timeLimit(.minutes(1)))
 struct Adversarial {
     func make(clock: ManualClock, log: any OpenLogStore = InMemoryOpenLogStore(), handoff: any InterventionHandoff = InMemoryInterventionHandoff(), passes: any PassStore = InMemoryPassStore()) -> InterventionCoordinator {
         InterventionCoordinator(catalog: StaticGuardedAppCatalog([Fixture.instagram]),
@@ -32,7 +32,7 @@ struct Adversarial {
                                 passes: passes, log: log, handoff: handoff, clock: clock)
     }
 
-    @Test("zero-duration proceed: own reopen is intervened again (loop)")
+    @Test("C-M1: after proceeding with a zero-length pass, the own reopen passes through")
     func zeroPassLoops() async throws {
         let clock = ManualClock(Fixture.date())
         let c = make(clock: clock)
@@ -44,7 +44,7 @@ struct Adversarial {
         #expect(second.decision == .passThrough(.returnFromIntervention), "got \(second.decision)")
     }
 
-    @Test("short pass (5 s) + reopen at 6 s: loops too")
+    @Test("C-M1: a 5 s pass reopened at 6 s still passes through inside the return window")
     func shortPassLoops() async throws {
         let clock = ManualClock(Fixture.date())
         let c = make(clock: clock)
@@ -57,7 +57,7 @@ struct Adversarial {
     }
 
     @MainActor
-    @Test("inbox keeps a stale context after foregroundUnavailable")
+    @Test("C-M2: the inbox drops a context withdrawn after a failed foreground switch")
     func staleInbox() async throws {
         let clock = ManualClock(Fixture.date())
         let handoff = InMemoryInterventionHandoff()
@@ -68,11 +68,11 @@ struct Adversarial {
         let outcome = await c.handleAutomationRun(appID: "instagram", continuation: SlowFailContinuation())
         #expect(outcome.decision == .passThrough(.foregroundUnavailable))
         try await Task.sleep(for: .milliseconds(50))
-        #expect(inbox.pending == nil, "inbox still shows \(String(describing: inbox.pending?.id))")
+        #expect(inbox.pending == nil, "inbox should be empty but shows \(String(describing: inbox.pending?.id))")
         observer.cancel()
     }
 
-    @Test("resolve: log append fails after pass saved -> free pass, no receipt")
+    @Test("C-S2: a resolve whose log write fails grants no pass")
     func freePass() async throws {
         let clock = ManualClock(Fixture.date())
         let log = FlakyLog()
@@ -81,10 +81,10 @@ struct Adversarial {
         let first = await c.handleAutomationRun(appID: "instagram", continuation: StubForegroundContinuation(.succeed))
         guard case .intervene(let ctx) = first.decision else { return }
         #expect(throws: InterventionError.self) { try c.resolve(ctx, .proceed(optionID: "pay", passDuration: .seconds(900))) }
-        #expect(try passes.pass(for: "instagram") == nil, "pass granted although resolve threw")
+        #expect(try passes.pass(for: "instagram") == nil, "no pass may exist after a failed resolve")
     }
 
-    @Test("two FileOpenLogStore instances on one directory lose lines")
+    @Test("C-S1: two log instances on one directory keep every line")
     func twoLogInstances() throws {
         let dir = Fixture.temporaryDirectory()
         let loc = FileStoreLocation.directory(dir)
@@ -96,10 +96,10 @@ struct Adversarial {
             try? store.append(OpenEvent(appID: "instagram", kind: .opened, date: Fixture.date()))
         }
         let count = try a.events(in: nil).count
-        #expect(count == n * 2, "only \(count) of \(n * 2) survived")
+        #expect(count == n * 2, "expected every line, got \(count) of \(n * 2)")
     }
 
-    @Test("two FilePassStore instances on one directory lose updates")
+    @Test("C-S1: two pass-store instances on one directory keep every update")
     func twoPassInstances() throws {
         let dir = Fixture.temporaryDirectory()
         let loc = FileStoreLocation.directory(dir)
@@ -110,10 +110,10 @@ struct Adversarial {
             try? store.save(Pass(appID: "app\(i)", grantedAt: Fixture.date(), expiresAt: Fixture.date().addingTimeInterval(600)))
         }
         let count = try a.allPasses().count
-        #expect(count == 200, "only \(count) of 200 passes survived")
+        #expect(count == 200, "expected 200 passes, got \(count)")
     }
 
-    @Test("torn last line swallows the next appended event")
+    @Test("C-C1: an append after a torn last line is still readable")
     func tornLine() throws {
         let dir = Fixture.temporaryDirectory()
         let store = FileOpenLogStore(location: .directory(dir))

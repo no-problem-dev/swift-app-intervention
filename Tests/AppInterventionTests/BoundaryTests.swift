@@ -41,13 +41,39 @@ struct BoundaryTests {
         #expect(await c.handleAutomationRun(appID: "instagram", continuation: StubForegroundContinuation()).decision.isIntervention)
     }
 
-    @Test("M24 / E-S5: 20 concurrent resolutions of one context — exactly one succeeds")
-    func concurrentResolve() async throws {
-        // Reads are slowed down so unserialized resolutions would all read before any writes.
+    @Test("M24: two resolutions that read at the same moment still record exactly one")
+    func concurrentResolveBarrier() async throws {
+        // The log's reads meet at a barrier: without serialization both resolutions read an
+        // empty log before either writes, and both would succeed. With it, the first reader
+        // waits out the barrier alone, writes, and the second sees the first's event.
+        let log = BarrierReadLog(parties: 2, timeout: 0.3)
         let c = InterventionCoordinator(
             catalog: StaticGuardedAppCatalog([Fixture.instagram]), policy: { InterventionPolicy() },
-            passes: InMemoryPassStore(), log: SlowReadLog(), handoff: InMemoryInterventionHandoff(), clock: clock
+            passes: InMemoryPassStore(), log: log, handoff: InMemoryInterventionHandoff(), clock: clock
         )
+        let context = InterventionContext(app: Fixture.instagram, requestedAt: clock.now, tier: .standard, reason: .fallback)
+        let results = await withTaskGroup(of: InterventionError.Code?.self) { group in
+            for choice in [InterventionResolution.proceed(optionID: "pay", passDuration: .seconds(60)), .abandon(optionID: "skip")] {
+                group.addTask { () -> InterventionError.Code? in
+                    do throws(InterventionError) {
+                        try c.resolve(context, choice)
+                        return nil
+                    } catch {
+                        return error.code
+                    }
+                }
+            }
+            var all: [InterventionError.Code?] = []
+            while let result = await group.next() { all.append(result) }
+            return all
+        }
+        #expect(results.filter { $0 == nil }.count == 1)
+        #expect(results.filter { $0 == InterventionError.Code.alreadyResolved }.count == 1)
+    }
+
+    @Test("E-S5: 20 concurrent resolutions of one context — exactly one succeeds")
+    func concurrentResolve() async throws {
+        let c = InterventionCoordinator.inMemory(catalog: StaticGuardedAppCatalog([Fixture.instagram]), policy: { InterventionPolicy() }, clock: clock)
         let context = InterventionContext(app: Fixture.instagram, requestedAt: clock.now, tier: .standard, reason: .fallback)
         let results = await withTaskGroup(of: InterventionError.Code?.self) { group in
             for i in 0..<20 {
@@ -131,12 +157,32 @@ struct BoundaryTests {
     }
 }
 
-/// A log whose reads take a few milliseconds, to widen race windows.
-final class SlowReadLog: OpenLogStore {
+/// A log whose reads wait at a barrier until `parties` readers have arrived (or `timeout`
+/// elapses), so concurrent readers are guaranteed to overlap without relying on timing luck.
+final class BarrierReadLog: OpenLogStore, @unchecked Sendable {
     let inner = InMemoryOpenLogStore()
+    private let condition = NSCondition()
+    private let parties: Int
+    private let timeout: TimeInterval
+    private var arrived = 0
+
+    init(parties: Int, timeout: TimeInterval) {
+        self.parties = parties
+        self.timeout = timeout
+    }
+
     func append(_ event: OpenEvent) throws(InterventionError) { try inner.append(event) }
+
     func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] {
-        Thread.sleep(forTimeInterval: 0.005)
+        condition.lock()
+        arrived += 1
+        if arrived >= parties {
+            condition.broadcast()
+        } else {
+            let deadline = Date().addingTimeInterval(timeout)
+            while arrived < parties, condition.wait(until: deadline) {}
+        }
+        condition.unlock()
         return try inner.events(in: interval)
     }
 }

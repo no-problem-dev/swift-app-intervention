@@ -9,6 +9,10 @@ Nothing here carries a brand: colors come from ``InterventionTheme`` in the envi
 (system semantic styles by default), and every string can be replaced. Built-in strings are
 localized in English, Japanese, Simplified and Traditional Chinese.
 
+> Important: iOS only uses a language the **host app** declares. Add
+> `CFBundleLocalizations` = `en`, `ja`, `zh-Hans`, `zh-Hant` to the app's Info.plist, or these
+> views stay English on a Japanese or Chinese device.
+
 ```swift
 InterventionPauseView(context: context) {
     Text("Opening costs 50 points.")

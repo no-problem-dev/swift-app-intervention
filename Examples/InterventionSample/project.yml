@@ -27,6 +27,8 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: Intervention Sample
+        # The package's UI is localized, but iOS only uses a language the HOST app declares.
+        CFBundleLocalizations: [en, ja, zh-Hans, zh-Hant]
         UILaunchScreen: {}
         # DEBUG-only QA entry points (interventionsample://qa/...); release builds ignore them.
         CFBundleURLTypes:
