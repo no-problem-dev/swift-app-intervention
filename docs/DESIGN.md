@@ -842,6 +842,6 @@ commands with `-qa-script`; the URL scheme stays for manual use.
 | Finding | Change |
 |---|---|
 | Localization not observable | The sample declares `CFBundleLocalizations` (en, ja, zh-Hans, zh-Hant) and localizes its display name (known regions). README (en/ja) and DocC state that the host must declare the languages. `make qa` adds Japanese light and dark passes of the setup guide and pause screen. |
-| M24 flaky under `make mutants` | The resolve test now meets at a barrier (`BarrierReadLog`, an `NSCondition` with a timeout), so without serialization both reads overlap every time. `make mutants` runs two worktrees side by side. |
+| M24 flaky under `make mutants` | The resolve test runs two resolutions on dedicated threads against `BarrierReadLog`, whose reads take their snapshot and then wait for each other (`NSCondition`, 1 s timeout). Without serialization both see an empty log every time; the cooperative pool is avoided because a busy parallel run could start the second task late. `make mutants` runs two worktrees side by side. |
 | Identical QA screenshots | Pass-through steps show the State tab, pauses show the pause screen (standard and strict tier), the phone-down result is a labelled line on its own tab; the first screenshot waits for `[QA] ready`. The QA budget is 2 min: three launches (en flow, ja light, ja dark). |
 | Adversarial test names | Renamed to the behaviour they assert. |
