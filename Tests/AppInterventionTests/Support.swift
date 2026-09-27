@@ -40,7 +40,7 @@ struct FailingPassStore: PassStore {
 struct FailingHandoff: InterventionHandoff {
     func post(_ context: InterventionContext) throws(InterventionError) { throw InterventionError(.write, file: "pending") }
     func take(now: Date, maxAge: Duration) throws(InterventionError) -> InterventionContext? { nil }
-    func changes() -> AsyncStream<Void> { AsyncStream { $0.finish() } }
+    func withdraw(contextID: UUID) throws(InterventionError) {}
 }
 
 final class CountingHostConditions: HostConditionProvider, @unchecked Sendable {

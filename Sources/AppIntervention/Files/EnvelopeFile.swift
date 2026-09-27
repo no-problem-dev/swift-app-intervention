@@ -36,11 +36,11 @@ package enum WireCoding {
 ///   and is never rewritten, so an older app build cannot destroy a newer build's data.
 /// - An undecodable file is quarantined and treated as absent.
 package struct EnvelopeFile<Payload: Codable>: Sendable {
-    package let file: CoordinatedFile
+    package let ref: FileRef
     package let formatVersion: Int
 
-    package init(file: CoordinatedFile, formatVersion: Int = 1) {
-        self.file = file
+    package init(ref: FileRef, formatVersion: Int = 1) {
+        self.ref = ref
         self.formatVersion = formatVersion
     }
 
@@ -51,13 +51,15 @@ package struct EnvelopeFile<Payload: Codable>: Sendable {
     }
 
     package func read() throws(InterventionError) -> Payload? {
-        try file.withExclusiveAccess { url throws(InterventionError) in try decode(at: url) }
+        let file = try ref.get()
+        return try file.withExclusiveAccess { url throws(InterventionError) in try decode(file, at: url) }
     }
 
     /// Read-modify-write under exclusive access. Setting the payload to `nil` deletes the file.
     package func modify<T>(_ body: (inout Payload?) -> T) throws(InterventionError) -> T {
-        try file.withExclusiveAccess { url throws(InterventionError) in
-            var payload = try decode(at: url)
+        let file = try ref.get()
+        return try file.withExclusiveAccess { url throws(InterventionError) in
+            var payload = try decode(file, at: url)
             let result = body(&payload)
             if let payload {
                 let data: Data
@@ -74,7 +76,7 @@ package struct EnvelopeFile<Payload: Codable>: Sendable {
         }
     }
 
-    private func decode(at url: URL) throws(InterventionError) -> Payload? {
+    private func decode(_ file: CoordinatedFile, at url: URL) throws(InterventionError) -> Payload? {
         guard let data = try file.readData(at: url) else { return nil }
         let decoder = WireCoding.decoder()
         guard let probe = try? decoder.decode(Probe.self, from: data) else {

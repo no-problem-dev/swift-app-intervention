@@ -28,11 +28,11 @@ extension PassStore {
         try update(appID: appID) { _ in nil }
     }
 
-    /// Removes passes that expired before `date`.
+    /// Removes passes that have expired and whose return window (if any) has ended too.
     public func removeExpired(asOf date: Date) throws(InterventionError) {
-        for pass in try allPasses() where pass.expiresAt <= date {
+        for pass in try allPasses() where pass.isExpired(at: date) {
             try update(appID: pass.appID) { current in
-                guard let current, current.expiresAt <= date else { return current }
+                guard let current, current.isExpired(at: date) else { return current }
                 return nil
             }
         }
@@ -93,14 +93,29 @@ public final class InMemoryOpenLogStore: OpenLogStore {
 
 // MARK: - InterventionHandoff
 
+/// What happened to the pending intervention.
+public enum HandoffChange: Sendable, Hashable {
+    /// A context was posted.
+    case posted(UUID)
+    /// A context was taken by a reader (usually the inbox).
+    case taken(UUID)
+    /// The context is void: the app could not come forward, or it was resolved elsewhere.
+    /// Readers that already hold it must drop it.
+    case withdrawn(UUID)
+}
+
 /// One slot carrying the pending intervention from the intent to the host UI.
 public protocol InterventionHandoff: Sendable {
     func post(_ context: InterventionContext) throws(InterventionError)
     /// Removes and returns the pending context. Returns `nil` when there is none or it is older
     /// than `maxAge` (a pause screen for an open from ten minutes ago would be wrong).
     func take(now: Date, maxAge: Duration) throws(InterventionError) -> InterventionContext?
-    /// Fires after every `post` and every `take` that removed something, in this process.
-    func changes() -> AsyncStream<Void>
+    /// Removes the pending context if it is `contextID`, and announces
+    /// ``HandoffChange/withdrawn(_:)`` either way so a reader that already took it drops it.
+    func withdraw(contextID: UUID) throws(InterventionError)
+    /// Changes in this process. The default implementation returns a finished stream; readers
+    /// then rely on ``InterventionInbox/refresh()``.
+    func changes() -> AsyncStream<HandoffChange>
 }
 
 extension InterventionHandoff {
@@ -108,19 +123,28 @@ extension InterventionHandoff {
     public func clear() throws(InterventionError) {
         _ = try take(now: .distantPast, maxAge: .zero)
     }
+
+    public func changes() -> AsyncStream<HandoffChange> {
+        AsyncStream { $0.finish() }
+    }
+}
+
+package func isFresh(_ context: InterventionContext, now: Date, maxAge: Duration) -> Bool {
+    let age = now.timeIntervalSince(context.requestedAt)
+    return age <= maxAge.timeInterval && age >= -60
 }
 
 /// An ``InterventionHandoff`` in memory. For tests, previews, and hosts that never need the
 /// context to survive the process.
 public final class InMemoryInterventionHandoff: InterventionHandoff {
     private let slot = Mutex<InterventionContext?>(nil)
-    private let broadcaster = Broadcaster<Void>()
+    private let broadcaster = Broadcaster<HandoffChange>()
 
     public init() {}
 
     public func post(_ context: InterventionContext) throws(InterventionError) {
         slot.withLock { $0 = context }
-        broadcaster.yield(())
+        broadcaster.yield(.posted(context.id))
     }
 
     public func take(now: Date, maxAge: Duration) throws(InterventionError) -> InterventionContext? {
@@ -129,14 +153,16 @@ public final class InMemoryInterventionHandoff: InterventionHandoff {
             return value
         }
         guard let taken else { return nil }
-        broadcaster.yield(())
-        return Self.fresh(taken, now: now, maxAge: maxAge)
+        broadcaster.yield(.taken(taken.id))
+        return isFresh(taken, now: now, maxAge: maxAge) ? taken : nil
     }
 
-    public func changes() -> AsyncStream<Void> { broadcaster.stream() }
-
-    package static func fresh(_ context: InterventionContext, now: Date, maxAge: Duration) -> InterventionContext? {
-        let age = now.timeIntervalSince(context.requestedAt)
-        return age <= maxAge.timeInterval && age >= -60 ? context : nil
+    public func withdraw(contextID: UUID) throws(InterventionError) {
+        slot.withLock { value in
+            if value?.id == contextID { value = nil }
+        }
+        broadcaster.yield(.withdrawn(contextID))
     }
+
+    public func changes() -> AsyncStream<HandoffChange> { broadcaster.stream() }
 }

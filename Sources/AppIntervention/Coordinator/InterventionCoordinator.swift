@@ -13,6 +13,7 @@ public final class InterventionCoordinator: Sendable {
     public let clock: any InterventionClock
     public let returnWindow: Duration
     public let opensLookback: Duration
+    public let hostConditionsTimeout: Duration
     private let policy: @Sendable () -> InterventionPolicy
     private let resolutionLock = NSLock()
     private let broadcaster = Broadcaster<OpenEvent>()
@@ -26,7 +27,11 @@ public final class InterventionCoordinator: Sendable {
     ///   - hostConditions: Host state for rules, fetched once per run.
     ///   - clock: The source of "now".
     ///   - returnWindow: How long after "proceed" the next run counts as the host's own reopen.
-    ///   - opensLookback: How much of the log rules see through ``RuleInput/opens``.
+    ///   - opensLookback: How much of the log rules see through ``RuleInput/opens``. Negative
+    ///     values are treated as zero.
+    ///   - hostConditionsTimeout: How long a run waits for ``HostConditionProvider``. When it
+    ///     takes longer, the run passes through (``PassThroughReason/failOpen(_:)`` with
+    ///     ``InterventionError/Code/timeout``) instead of holding the user in the guarded app.
     public init(
         catalog: any GuardedAppCatalog,
         policy: @escaping @Sendable () -> InterventionPolicy,
@@ -36,7 +41,8 @@ public final class InterventionCoordinator: Sendable {
         hostConditions: any HostConditionProvider = NoHostConditions(),
         clock: any InterventionClock = SystemClock(),
         returnWindow: Duration = .seconds(15),
-        opensLookback: Duration = .seconds(2 * 86_400)
+        opensLookback: Duration = .seconds(2 * 86_400),
+        hostConditionsTimeout: Duration = .seconds(2)
     ) {
         self.catalog = catalog
         self.policy = policy
@@ -45,25 +51,47 @@ public final class InterventionCoordinator: Sendable {
         self.handoff = handoff
         self.hostConditions = hostConditions
         self.clock = clock
-        self.returnWindow = returnWindow
-        self.opensLookback = opensLookback
+        self.returnWindow = max(returnWindow, .zero)
+        self.opensLookback = max(opensLookback, .zero)
+        self.hostConditionsTimeout = max(hostConditionsTimeout, .zero)
     }
 
     /// A coordinator over the file stores at `location`.
+    ///
+    /// Never throws: the location is resolved on first use. If it cannot be (a missing App Group
+    /// entitlement, a read-only disk), automation runs pass through with
+    /// ``PassThroughReason/failOpen(_:)`` rather than crashing the intent's process.
     public static func files(
         at location: FileStoreLocation,
         catalog: any GuardedAppCatalog,
         policy: @escaping @Sendable () -> InterventionPolicy,
         hostConditions: any HostConditionProvider = NoHostConditions(),
         retention: OpenLogRetention = .init(),
-        clock: any InterventionClock = SystemClock()
-    ) throws(InterventionError) -> InterventionCoordinator {
-        let resolved = try location.resolve()
-        return InterventionCoordinator(
+        clock: any InterventionClock = SystemClock(),
+        returnWindow: Duration = .seconds(15),
+        opensLookback: Duration = .seconds(2 * 86_400),
+        hostConditionsTimeout: Duration = .seconds(2)
+    ) -> InterventionCoordinator {
+        InterventionCoordinator(
             catalog: catalog, policy: policy,
-            passes: FilePassStore(resolved: resolved),
-            log: FileOpenLogStore(resolved: resolved, retention: retention, clock: clock),
-            handoff: FileInterventionHandoff(resolved: resolved),
+            passes: FilePassStore(location: location),
+            log: FileOpenLogStore(location: location, retention: retention, clock: clock),
+            handoff: FileInterventionHandoff(location: location),
+            hostConditions: hostConditions, clock: clock,
+            returnWindow: returnWindow, opensLookback: opensLookback, hostConditionsTimeout: hostConditionsTimeout
+        )
+    }
+
+    /// A coordinator that keeps everything in memory. For previews, tests and demos.
+    public static func inMemory(
+        catalog: any GuardedAppCatalog,
+        policy: @escaping @Sendable () -> InterventionPolicy,
+        hostConditions: any HostConditionProvider = NoHostConditions(),
+        clock: any InterventionClock = SystemClock()
+    ) -> InterventionCoordinator {
+        InterventionCoordinator(
+            catalog: catalog, policy: policy,
+            passes: InMemoryPassStore(), log: InMemoryOpenLogStore(), handoff: InMemoryInterventionHandoff(),
             hostConditions: hostConditions, clock: clock
         )
     }
@@ -103,10 +131,16 @@ public final class InterventionCoordinator: Sendable {
             return done(.passThrough(reason))
         }
 
-        let snapshot = await hostConditions.snapshot(for: app, at: now)
+        guard let snapshot = await snapshotWithinTimeout(for: app, at: now) else {
+            record(OpenEvent(appID: appID, kind: .opened, date: now))
+            let reason = PassThroughReason.failOpen(.timeout)
+            record(OpenEvent(appID: appID, kind: .passedThrough, date: now, note: reason.note))
+            return done(.passThrough(reason))
+        }
         let input = RuleInput(
             app: app, now: now, calendar: current.calendar,
-            opens: OpenLogQuery(recent, calendar: current.calendar), host: snapshot
+            opens: OpenLogQuery(recent, calendar: current.calendar, dayStartOffset: current.dayStartOffset),
+            host: snapshot
         )
         let decision = current.decide(input, pass: pass)
 
@@ -149,9 +183,26 @@ public final class InterventionCoordinator: Sendable {
                     // fall through to foregroundUnavailable
                 }
             }
-            _ = try? handoff.clear()
+            // Withdraw, not clear: an inbox may already have taken the context in-process.
+            try? handoff.withdraw(contextID: context.id)
             record(OpenEvent(appID: appID, kind: .passedThrough, date: now, note: PassThroughReason.foregroundUnavailable.note))
             return done(.passThrough(.foregroundUnavailable))
+        }
+    }
+
+    /// `nil` when the provider did not answer within ``hostConditionsTimeout``.
+    private func snapshotWithinTimeout(for app: GuardedApp, at now: Date) async -> HostSnapshot? {
+        let provider = hostConditions
+        let timeout = hostConditionsTimeout
+        return await withTaskGroup(of: HostSnapshot?.self) { group in
+            group.addTask { await provider.snapshot(for: app, at: now) }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 
@@ -183,17 +234,25 @@ public final class InterventionCoordinator: Sendable {
         switch resolution {
         case .proceed(let optionID, let duration):
             let pass = Pass(appID: context.app.id, grantedAt: now, expiresAt: now.adding(duration), returnWindowEndsAt: now.adding(returnWindow))
-            try passes.save(pass)
+            var previous: Pass?
+            try passes.update(appID: context.app.id) { existing in
+                previous = existing
+                return pass
+            }
+            do throws(InterventionError) {
+                try appendAndBroadcast(OpenEvent(appID: context.app.id, kind: .proceeded, date: now, tier: context.tier, contextID: context.id, optionID: optionID))
+            } catch {
+                // No record, no pass: otherwise the user would get in for free and a retry
+                // could not tell that nothing was booked.
+                _ = try? passes.update(appID: context.app.id) { _ in previous }
+                throw error
+            }
             granted = pass
-            try appendAndBroadcast(OpenEvent(appID: context.app.id, kind: .proceeded, date: now, tier: context.tier, contextID: context.id, optionID: optionID))
         case .abandon(let optionID):
             try appendAndBroadcast(OpenEvent(appID: context.app.id, kind: .abandoned, date: now, tier: context.tier, contextID: context.id, optionID: optionID))
         }
 
-        // Clear a still-pending copy of this context; put back anything else.
-        if let pending = try? handoff.take(now: now, maxAge: .seconds(Int64.max / 2)), pending.id != context.id {
-            try? handoff.post(pending)
-        }
+        try? handoff.withdraw(contextID: context.id)
 
         return ResolutionReceipt(contextID: context.id, appID: context.app.id, tier: context.tier, resolution: resolution, resolvedAt: now, pass: granted)
     }
@@ -209,6 +268,7 @@ public final class InterventionCoordinator: Sendable {
         }
     }
 
+    /// Grants a pass outside an intervention (e.g. a reward). It has no return window.
     @discardableResult
     public func grantPass(appID: GuardedApp.ID, duration: Duration) throws(InterventionError) -> Pass {
         let now = clock.now
@@ -217,12 +277,14 @@ public final class InterventionCoordinator: Sendable {
         return pass
     }
 
+    /// Removes the app's pass, e.g. when a lock starts.
     public func revokePass(appID: GuardedApp.ID) throws(InterventionError) {
         try passes.removePass(for: appID)
     }
 
     // MARK: - Log
 
+    /// Open-log events, ascending, limited to `interval` when given.
     public func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] {
         try log.events(in: interval)
     }

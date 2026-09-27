@@ -15,19 +15,30 @@ public struct InterventionPolicy: Sendable {
         case passThrough
     }
 
+    /// Evaluated in order.
     public var rules: [any InterventionRule]
+    /// What happens when no rule has an opinion.
     public var fallback: Fallback
+    /// The calendar rules see in ``RuleInput/calendar``.
     public var calendar: Calendar
+    /// Where the host's day starts (e.g. 4 hours → 04:00). Applied to ``RuleInput/opens``, so
+    /// ``OpenCountRule`` counts the same "today" as `OpenCountSummaryView(dayStartOffset:)`.
+    public var dayStartOffset: Duration
 
-    public init(rules: [any InterventionRule] = [], fallback: Fallback = .intervene(.standard), calendar: Calendar = .current) {
+    public init(
+        rules: [any InterventionRule] = [], fallback: Fallback = .intervene(.standard),
+        calendar: Calendar = .current, dayStartOffset: Duration = .zero
+    ) {
         self.rules = rules
         self.fallback = fallback
         self.calendar = calendar
+        self.dayStartOffset = dayStartOffset
     }
 
+    /// Decides one run. Pure: the same input, pass and context id always give the same decision.
     public func decide(_ input: RuleInput, pass: Pass?, contextID: UUID = UUID()) -> InterventionDecision {
         let now = input.now
-        if let pass, pass.appID == input.app.id, pass.isValid(at: now), pass.isInReturnWindow(at: now) {
+        if let pass, pass.appID == input.app.id, pass.isInReturnWindow(at: now) {
             return .passThrough(.returnFromIntervention)
         }
 

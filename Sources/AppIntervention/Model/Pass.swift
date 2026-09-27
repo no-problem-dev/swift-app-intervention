@@ -26,8 +26,16 @@ public struct Pass: Sendable, Hashable, Codable {
     }
 
     /// Whether `date` falls inside the unconsumed return window.
+    ///
+    /// Independent of ``isValid(at:)``: a pass for zero or a few seconds must still let the
+    /// host's own reopen through, or the automation would intervene again and loop.
     public func isInReturnWindow(at date: Date) -> Bool {
         guard let end = returnWindowEndsAt else { return false }
         return grantedAt <= date && date < end
+    }
+
+    /// Expired and outside any return window, so it can be deleted.
+    public func isExpired(at date: Date) -> Bool {
+        expiresAt <= date && !isInReturnWindow(at: date)
     }
 }

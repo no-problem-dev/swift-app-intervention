@@ -2,15 +2,21 @@ import Foundation
 import Synchronization
 
 /// A ``PassStore`` in `passes.json`.
+///
+/// Instances on the same path share one lock in this process; cross-process locations are also
+/// coordinated with `NSFileCoordinator`.
 public final class FilePassStore: PassStore {
     private let file: EnvelopeFile<[Pass]>
 
-    public convenience init(location: FileStoreLocation) throws(InterventionError) {
-        self.init(resolved: try location.resolve())
+    /// Never throws: the location is resolved on first use, and a failure there is reported by
+    /// that call (the automation path then fails open).
+    public init(location: FileStoreLocation) {
+        file = EnvelopeFile(ref: FileRef(location: location, name: "passes.json"))
     }
 
+    /// A store in an already resolved directory.
     public init(resolved: ResolvedFileStoreLocation) {
-        file = EnvelopeFile(file: resolved.file("passes.json"))
+        file = EnvelopeFile(ref: FileRef(resolved: resolved, name: "passes.json"))
     }
 
     public func allPasses() throws(InterventionError) -> [Pass] {
@@ -35,22 +41,27 @@ public final class FilePassStore: PassStore {
 /// An ``InterventionHandoff`` in `pending-intervention.json`.
 ///
 /// The file lets the context survive until a scene exists when the intent's process was launched
-/// in the background; ``changes()`` is the fast in-process path.
+/// in the background; ``changes()`` is the fast in-process path, shared by every instance on the
+/// same path.
 public final class FileInterventionHandoff: InterventionHandoff {
+    private let ref: FileRef
     private let file: EnvelopeFile<InterventionContext>
-    private let broadcaster = Broadcaster<Void>()
 
-    public convenience init(location: FileStoreLocation) throws(InterventionError) {
-        self.init(resolved: try location.resolve())
+    /// Never throws; see ``FilePassStore/init(location:)``.
+    public init(location: FileStoreLocation) {
+        ref = FileRef(location: location, name: "pending-intervention.json")
+        file = EnvelopeFile(ref: ref)
     }
 
+    /// A handoff in an already resolved directory.
     public init(resolved: ResolvedFileStoreLocation) {
-        file = EnvelopeFile(file: resolved.file("pending-intervention.json"))
+        ref = FileRef(resolved: resolved, name: "pending-intervention.json")
+        file = EnvelopeFile(ref: ref)
     }
 
     public func post(_ context: InterventionContext) throws(InterventionError) {
         try file.modify { $0 = context }
-        broadcaster.yield(())
+        try ref.get().shared.handoffChanges.yield(.posted(context.id))
     }
 
     public func take(now: Date, maxAge: Duration) throws(InterventionError) -> InterventionContext? {
@@ -59,16 +70,28 @@ public final class FileInterventionHandoff: InterventionHandoff {
             return payload
         }
         guard let taken else { return nil }
-        broadcaster.yield(())
-        return InMemoryInterventionHandoff.fresh(taken, now: now, maxAge: maxAge)
+        try ref.get().shared.handoffChanges.yield(.taken(taken.id))
+        return isFresh(taken, now: now, maxAge: maxAge) ? taken : nil
     }
 
-    public func changes() -> AsyncStream<Void> { broadcaster.stream() }
+    public func withdraw(contextID: UUID) throws(InterventionError) {
+        try file.modify { payload in
+            if payload?.id == contextID { payload = nil }
+        }
+        try ref.get().shared.handoffChanges.yield(.withdrawn(contextID))
+    }
+
+    public func changes() -> AsyncStream<HandoffChange> {
+        guard let file = try? ref.get() else { return AsyncStream { $0.finish() } }
+        return file.shared.handoffChanges.stream()
+    }
 }
 
 /// How long the open log keeps events.
 public struct OpenLogRetention: Sendable, Hashable {
+    /// Events older than this are dropped on compaction. Default 90 days.
     public var maxAge: Duration
+    /// At most this many events are kept. Default 5,000.
     public var maxCount: Int
 
     public init(maxAge: Duration = .seconds(90 * 86_400), maxCount: Int = 5_000) {
@@ -79,7 +102,8 @@ public struct OpenLogRetention: Sendable, Hashable {
 
 /// An ``OpenLogStore`` in `open-log.jsonl`, one event per line.
 ///
-/// - Appending writes one line; it never rewrites the file.
+/// - Appending writes one line with `O_APPEND`; it never rewrites the file. A torn last line
+///   (from a crash mid-write) is terminated first so the new event survives.
 /// - Lines with an unknown `kind` or a newer `v` are skipped by readers and **preserved** by
 ///   compaction, so an older build never destroys a newer build's events. Malformed lines are
 ///   skipped and dropped on compaction.
@@ -88,17 +112,20 @@ public struct OpenLogRetention: Sendable, Hashable {
 public final class FileOpenLogStore: OpenLogStore {
     package static let lineVersion = 1
 
-    private let file: CoordinatedFile
+    private let ref: FileRef
     private let retention: OpenLogRetention
     private let clock: any InterventionClock
-    private let cachedLineCount = Mutex<Int?>(nil)
 
-    public convenience init(location: FileStoreLocation, retention: OpenLogRetention = .init(), clock: any InterventionClock = SystemClock()) throws(InterventionError) {
-        self.init(resolved: try location.resolve(), retention: retention, clock: clock)
+    /// Never throws; see ``FilePassStore/init(location:)``.
+    public init(location: FileStoreLocation, retention: OpenLogRetention = .init(), clock: any InterventionClock = SystemClock()) {
+        ref = FileRef(location: location, name: "open-log.jsonl")
+        self.retention = retention
+        self.clock = clock
     }
 
+    /// A log in an already resolved directory.
     public init(resolved: ResolvedFileStoreLocation, retention: OpenLogRetention = .init(), clock: any InterventionClock = SystemClock()) {
-        file = resolved.file("open-log.jsonl")
+        ref = FileRef(resolved: resolved, name: "open-log.jsonl")
         self.retention = retention
         self.clock = clock
     }
@@ -121,6 +148,7 @@ public final class FileOpenLogStore: OpenLogStore {
     }
 
     public func append(_ event: OpenEvent) throws(InterventionError) {
+        let file = try ref.get()
         let line = Line(
             v: Self.lineVersion, id: event.id, app: event.appID, kind: event.kind.rawValue,
             t: WireCoding.epochMilliseconds(event.date), tier: event.tier?.rawValue,
@@ -137,16 +165,23 @@ public final class FileOpenLogStore: OpenLogStore {
         data.append(0x0A)
 
         try file.withExclusiveAccess { url throws(InterventionError) in
-            try file.append(data, to: url)
-            let count = try currentLineCount(at: url, justAppended: true)
+            try file.appendLine(data, to: url)
+            let count: Int
+            if let cached = file.shared.lineCount {
+                count = cached + 1
+            } else {
+                count = try readLines(file, at: url).count
+            }
+            file.shared.lineCount = count
             if Double(count) > Double(retention.maxCount) * 1.25 {
-                try compactLocked(at: url)
+                try compactLocked(file, at: url)
             }
         }
     }
 
     public func events(in interval: DateInterval?) throws(InterventionError) -> [OpenEvent] {
-        let lines = try file.withExclusiveAccess { url throws(InterventionError) in try readLines(at: url) }
+        let file = try ref.get()
+        let lines = try file.withExclusiveAccess { url throws(InterventionError) in try readLines(file, at: url) }
         let decoder = JSONDecoder()
         var events: [OpenEvent] = []
         for raw in lines {
@@ -166,31 +201,21 @@ public final class FileOpenLogStore: OpenLogStore {
 
     /// Applies retention now.
     public func compact() throws(InterventionError) {
-        try file.withExclusiveAccess { url throws(InterventionError) in try compactLocked(at: url) }
+        let file = try ref.get()
+        try file.withExclusiveAccess { url throws(InterventionError) in try compactLocked(file, at: url) }
     }
 
     // MARK: - Private (inside exclusive access)
 
-    private func readLines(at url: URL) throws(InterventionError) -> [String] {
+    private func readLines(_ file: CoordinatedFile, at url: URL) throws(InterventionError) -> [String] {
         guard let data = try file.readData(at: url) else { return [] }
         return String(decoding: data, as: UTF8.self)
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map(String.init)
     }
 
-    private func currentLineCount(at url: URL, justAppended: Bool) throws(InterventionError) -> Int {
-        let cached = cachedLineCount.withLock { value -> Int? in
-            if let current = value, justAppended { value = current + 1 }
-            return value
-        }
-        if let cached { return cached }
-        let count = try readLines(at: url).count
-        cachedLineCount.withLock { $0 = count }
-        return count
-    }
-
-    private func compactLocked(at url: URL) throws(InterventionError) {
-        let lines = try readLines(at: url)
+    private func compactLocked(_ file: CoordinatedFile, at url: URL) throws(InterventionError) {
+        let lines = try readLines(file, at: url)
         let cutoff = WireCoding.epochMilliseconds(clock.now.addingTimeInterval(-retention.maxAge.timeInterval))
         let decoder = JSONDecoder()
         let kept = lines.compactMap { raw -> (Int64, String)? in
@@ -204,6 +229,6 @@ public final class FileOpenLogStore: OpenLogStore {
         var data = Data(newest.joined(separator: "\n").utf8)
         if !newest.isEmpty { data.append(0x0A) }
         try file.writeAtomically(data, to: url)
-        cachedLineCount.withLock { $0 = newest.count }
+        file.shared.lineCount = newest.count
     }
 }

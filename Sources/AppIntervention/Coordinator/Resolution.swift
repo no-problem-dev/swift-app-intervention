@@ -7,6 +7,7 @@ public enum InterventionResolution: Sendable, Hashable {
     /// Do not open.
     case abandon(optionID: String?)
 
+    /// The host option that produced this resolution.
     public var optionID: String? {
         switch self {
         case .proceed(let id, _): id
@@ -19,6 +20,7 @@ public enum InterventionResolution: Sendable, Hashable {
 ///
 /// Book costs or rewards in the host ledger with ``contextID`` as the idempotency key.
 public struct ResolutionReceipt: Sendable, Hashable {
+    /// The intervention's id — the ledger's idempotency key.
     public let contextID: UUID
     public let appID: GuardedApp.ID
     public let tier: InterventionTier
@@ -26,6 +28,15 @@ public struct ResolutionReceipt: Sendable, Hashable {
     public let resolvedAt: Date
     /// The pass granted by ``InterventionResolution/proceed(optionID:passDuration:)``.
     public let pass: Pass?
+
+    public init(contextID: UUID, appID: GuardedApp.ID, tier: InterventionTier, resolution: InterventionResolution, resolvedAt: Date, pass: Pass?) {
+        self.contextID = contextID
+        self.appID = appID
+        self.tier = tier
+        self.resolution = resolution
+        self.resolvedAt = resolvedAt
+        self.pass = pass
+    }
 }
 
 /// What one automation run did.
@@ -33,6 +44,14 @@ public struct AutomationRunOutcome: Sendable, Hashable {
     public let decision: InterventionDecision
     /// From the start of the run to the decision. Useful device-gate evidence for launch latency.
     public let elapsed: Duration
+
+    public init(decision: InterventionDecision, elapsed: Duration) {
+        self.decision = decision
+        self.elapsed = elapsed
+    }
+
+    /// ``elapsed`` in whole milliseconds, for logs.
+    public var elapsedMilliseconds: Int64 { elapsed.milliseconds }
 }
 
 /// Bringing the host app to the foreground from a running intent.
@@ -49,12 +68,27 @@ public protocol ForegroundContinuation: Sendable {
 
 /// A scripted ``ForegroundContinuation``. For tests and previews.
 public struct StubForegroundContinuation: ForegroundContinuation {
-    public enum Behavior: Sendable, Hashable { case succeed, fail, unavailable, alreadyForeground }
-    public struct Failure: Error {}
+    public enum Behavior: Sendable, Hashable {
+        /// Background; continuing succeeds.
+        case succeed
+        /// Background; continuing throws ``Failure``.
+        case fail
+        /// Background; the system does not allow continuing.
+        case unavailable
+        /// Already in the foreground.
+        case alreadyForeground
+    }
+    /// Thrown by ``Behavior/fail``.
+    public struct Failure: Error {
+        public init() {}
+    }
 
     public let behavior: Behavior
     private let onContinue: @Sendable () -> Void
 
+    /// - Parameters:
+    ///   - behavior: What the stub does.
+    ///   - onContinue: Called on every ``continueInForeground()``.
     public init(_ behavior: Behavior = .succeed, onContinue: @escaping @Sendable () -> Void = {}) {
         self.behavior = behavior
         self.onContinue = onContinue

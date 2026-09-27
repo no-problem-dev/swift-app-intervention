@@ -6,7 +6,8 @@ import Testing
 struct FileStoreTests {
     let directory = Fixture.temporaryDirectory()
     var location: FileStoreLocation { .directory(directory) }
-    var storeDirectory: URL { directory.appending(path: "AppIntervention") }
+    /// The stores resolve lazily; tests that write files by hand resolve first.
+    var storeDirectory: URL { (try? location.resolve().directory) ?? directory.appending(path: "AppIntervention") }
     let now = Fixture.date(2026, 9, 27, 12)
 
     func contents() throws -> [String] {
@@ -28,7 +29,7 @@ struct FileStoreTests {
 
     @Test("removing the last pass deletes the file; atomic writes leave no temporaries")
     func removeLast() throws {
-        let store = try FilePassStore(location: location)
+        let store = FilePassStore(location: location)
         try store.save(Pass(appID: "a", grantedAt: now, expiresAt: now.addingTimeInterval(1)))
         try store.save(Pass(appID: "b", grantedAt: now, expiresAt: now.addingTimeInterval(1)))
         #expect(try contents() == ["passes.json"])
@@ -38,7 +39,7 @@ struct FileStoreTests {
 
     @Test("a corrupt file is quarantined and treated as empty")
     func corruptQuarantined() throws {
-        let store = try FilePassStore(location: location)
+        let store = FilePassStore(location: location)
         try Data("{not json".utf8).write(to: storeDirectory.appending(path: "passes.json"))
         #expect(try store.allPasses().isEmpty)
         let names = try contents()
@@ -50,7 +51,7 @@ struct FileStoreTests {
 
     @Test("a payload that does not decode is quarantined too")
     func payloadCorrupt() throws {
-        let store = try FilePassStore(location: location)
+        let store = FilePassStore(location: location)
         try Data(#"{"formatVersion":1,"payload":{"x":1}}"#.utf8).write(to: storeDirectory.appending(path: "passes.json"))
         #expect(try store.allPasses().isEmpty)
         #expect(try contents().first?.hasPrefix("passes.json.corrupt-") == true)
@@ -60,7 +61,7 @@ struct FileStoreTests {
     func newerEnvelope() throws {
         let url = storeDirectory.appending(path: "passes.json")
         let newer = Data(#"{"formatVersion":2,"payload":{"future":true}}"#.utf8)
-        let store = try FilePassStore(location: location)
+        let store = FilePassStore(location: location)
         try newer.write(to: url)
         do {
             _ = try store.allPasses()
@@ -74,14 +75,14 @@ struct FileStoreTests {
 
     @Test("cross-process locations coordinate and still round-trip")
     func crossProcess() throws {
-        let store = try FilePassStore(location: .directory(directory, crossProcess: true))
+        let store = FilePassStore(location: .directory(directory, crossProcess: true))
         try store.save(Pass(appID: "a", grantedAt: now, expiresAt: now.addingTimeInterval(1)))
         #expect(try store.allPasses().count == 1)
     }
 
     @Test("concurrent updates from many threads lose nothing")
     func concurrentUpdates() async throws {
-        let store = try FilePassStore(location: location)
+        let store = FilePassStore(location: location)
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<40 {
                 group.addTask { _ = try? store.save(Pass(appID: "app\(i)", grantedAt: now, expiresAt: now.addingTimeInterval(60))) }
@@ -94,7 +95,7 @@ struct FileStoreTests {
 
     @Test("handoff: post, take removes, stale is dropped, changes fire")
     func handoff() async throws {
-        let handoff = try FileInterventionHandoff(location: location)
+        let handoff = FileInterventionHandoff(location: location)
         let changes = handoff.changes()
         let context = InterventionContext(app: Fixture.instagram, requestedAt: now, tier: "strict", reason: .locked(ruleID: "r", LockReason(id: "x", detail: "d")))
         try handoff.post(context)
@@ -121,7 +122,7 @@ struct FileStoreTests {
 
     @Test("open log round-trips every field and filters by interval")
     func logRoundTrip() throws {
-        let store = try FileOpenLogStore(location: location)
+        let store = FileOpenLogStore(location: location)
         let events = [event(.opened, 0), event(.intervened, 1), event(.proceeded, 2)]
         for e in events { try store.append(e) }
         #expect(try FileOpenLogStore(location: location).events(in: nil) == events)
@@ -131,7 +132,7 @@ struct FileStoreTests {
     @Test("unknown kinds and newer lines are skipped by readers and preserved by compaction")
     func forwardCompatible() throws {
         let clock = ManualClock(now)
-        let store = try FileOpenLogStore(location: location, clock: clock)
+        let store = FileOpenLogStore(location: location, clock: clock)
         try store.append(event(.opened, 0))
         let url = storeDirectory.appending(path: "open-log.jsonl")
         let t = WireCoding.epochMilliseconds(now)
@@ -154,7 +155,7 @@ struct FileStoreTests {
     @Test("retention: compaction drops old events and keeps the newest maxCount")
     func retention() throws {
         let clock = ManualClock(now)
-        let store = try FileOpenLogStore(location: location, retention: OpenLogRetention(maxAge: .seconds(3_600), maxCount: 4), clock: clock)
+        let store = FileOpenLogStore(location: location, retention: OpenLogRetention(maxAge: .seconds(3_600), maxCount: 4), clock: clock)
         try store.append(event(.opened, -7_200))            // too old
         for i in 0..<4 { try store.append(event(.opened, Double(i))) }
         // 5 lines ≤ 4 × 1.25: no automatic compaction yet

@@ -16,8 +16,10 @@ public struct DayCount: Sendable, Hashable {
 /// `dayStartOffset` moves the day boundary: with 4 hours, "today" runs from 04:00 to 04:00,
 /// so a late-night open still counts toward the evening it belongs to.
 public struct OpenLogQuery: Sendable {
+    /// The events, ascending by date.
     public let events: [OpenEvent]
     public let calendar: Calendar
+    /// Where the host's day starts after midnight (0 ..< 24 h).
     public let dayStartOffset: Duration
 
     public init(_ events: [OpenEvent], calendar: Calendar = .current, dayStartOffset: Duration = .zero) {
@@ -27,12 +29,33 @@ public struct OpenLogQuery: Sendable {
     }
 
     /// The host day that contains `date`.
+    ///
+    /// Boundaries are wall-clock times (`startOfDay + dayStartOffset` in the calendar's time
+    /// zone), so a 04:00 boundary stays at 04:00 across daylight-saving changes.
     public func day(containing date: Date) -> DateInterval {
-        let offset = dayStartOffset.timeInterval
-        let shifted = date.addingTimeInterval(-offset)
-        let start = calendar.startOfDay(for: shifted)
-        let next = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
-        return DateInterval(start: start.addingTimeInterval(offset), end: next.addingTimeInterval(offset))
+        let start = dayStart(onOrBefore: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: start)) ?? start.addingTimeInterval(86_400)
+        let end = wallClockBoundary(onDayOf: nextDay)
+        return DateInterval(start: start, end: max(end, start.addingTimeInterval(1)))
+    }
+
+    private var offsetComponents: (hour: Int, minute: Int, second: Int) {
+        let total = max(0, Int(dayStartOffset.components.seconds)) % 86_400
+        return (total / 3_600, (total % 3_600) / 60, total % 60)
+    }
+
+    private func wallClockBoundary(onDayOf day: Date) -> Date {
+        let (hour, minute, second) = offsetComponents
+        let midnight = calendar.startOfDay(for: day)
+        return calendar.date(bySettingHour: hour, minute: minute, second: second, of: midnight, matchingPolicy: .nextTime, repeatedTimePolicy: .first, direction: .forward)
+            ?? midnight.addingTimeInterval(TimeInterval(hour * 3_600 + minute * 60 + second))
+    }
+
+    private func dayStart(onOrBefore date: Date) -> Date {
+        let sameDay = wallClockBoundary(onDayOf: date)
+        if sameDay <= date { return sameDay }
+        let previous = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: date)) ?? date.addingTimeInterval(-86_400)
+        return wallClockBoundary(onDayOf: previous)
     }
 
     /// Events of `kind`, optionally within `[interval.start, interval.end)` and for one app.

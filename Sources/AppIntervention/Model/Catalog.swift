@@ -54,7 +54,7 @@ public struct NoHostConditions: HostConditionProvider {
 }
 
 /// Host state from a closure.
-public struct HostConditions: HostConditionProvider {
+public struct ClosureHostConditionProvider: HostConditionProvider {
     private let body: @Sendable (GuardedApp, Date) async -> HostSnapshot
     public init(_ body: @escaping @Sendable (GuardedApp, Date) async -> HostSnapshot) { self.body = body }
     public func snapshot(for app: GuardedApp, at date: Date) async -> HostSnapshot { await body(app, date) }

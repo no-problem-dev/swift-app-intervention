@@ -27,18 +27,26 @@ public struct InterventionError: Error, Sendable, CustomStringConvertible {
         public static let unsupportedVersion = Code(rawValue: "unsupportedVersion")
         /// The intervention was already resolved (double tap, second presenter, retry).
         public static let alreadyResolved = Code(rawValue: "alreadyResolved")
+        /// The host's conditions did not arrive in time; the run passed through.
+        public static let timeout = Code(rawValue: "timeout")
+        /// The pending intervention is too old to act on.
+        public static let expired = Code(rawValue: "expired")
         /// A host-provided store failed; see ``InterventionError/underlying``.
         public static let custom = Code(rawValue: "custom")
 
         public var description: String { rawValue }
     }
 
+    /// What went wrong.
     public let code: Code
     /// The file involved, when there is one (last path component).
     public let file: String?
+    /// Human-readable detail for logs.
     public let message: String?
+    /// The error this one wraps, e.g. a Foundation error or a custom store's error.
     public let underlying: (any Error & Sendable)?
 
+    /// Creates an error. Custom stores use ``Code/custom`` with their own error as `underlying`.
     public init(_ code: Code, file: String? = nil, message: String? = nil, underlying: (any Error & Sendable)? = nil) {
         self.code = code
         self.file = file

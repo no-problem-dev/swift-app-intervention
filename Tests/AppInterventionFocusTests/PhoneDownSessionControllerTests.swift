@@ -102,7 +102,7 @@ struct PhoneDownSessionControllerTests {
     @Test("the file store round-trips a session")
     func fileStore() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "PhoneDown-\(UUID().uuidString)")
-        let file = try FilePhoneDownSessionStore(location: .directory(dir))
+        let file = FilePhoneDownSessionStore(location: .directory(dir))
         var session = PhoneDownSession.start(at: clock.now, duration: .seconds(60))
         session.handle(.enteredBackground(clock.now.addingTimeInterval(1)))
         try file.save(session)

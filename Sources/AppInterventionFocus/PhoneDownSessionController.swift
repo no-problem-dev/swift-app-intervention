@@ -30,8 +30,11 @@ public final class PhoneDownSessionController {
         self.tickInterval = tickInterval
     }
 
-    /// Terminal outcomes, as they happen.
-    public func outcomes() -> AsyncStream<PhoneDownOutcome> { broadcaster.stream() }
+    /// Terminal outcomes. A subscriber first receives the current unacknowledged outcome, if
+    /// any, so one that starts after ``resume(appIsActive:)`` does not miss it.
+    public func outcomes() -> AsyncStream<PhoneDownOutcome> {
+        broadcaster.stream(replaying: session?.outcome.map { [$0] } ?? [])
+    }
 
     /// Starts a new session, replacing any previous one.
     public func start(duration: Duration, configuration: PhoneDownSession.Configuration = .init()) throws(InterventionError) {

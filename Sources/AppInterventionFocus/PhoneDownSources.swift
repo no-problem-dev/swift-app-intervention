@@ -15,12 +15,14 @@ public protocol PhoneDownSessionStore: Sendable {
 public final class FilePhoneDownSessionStore: PhoneDownSessionStore {
     private let file: EnvelopeFile<PhoneDownSession>
 
-    public convenience init(location: FileStoreLocation) throws(InterventionError) {
-        self.init(resolved: try location.resolve())
+    /// Never throws: the location is resolved on first use.
+    public init(location: FileStoreLocation) {
+        file = EnvelopeFile(ref: FileRef(location: location, name: "phone-down-session.json"))
     }
 
+    /// A store in an already resolved directory.
     public init(resolved: ResolvedFileStoreLocation) {
-        file = EnvelopeFile(file: resolved.file("phone-down-session.json"))
+        file = EnvelopeFile(ref: FileRef(resolved: resolved, name: "phone-down-session.json"))
     }
 
     public func load() throws(InterventionError) -> PhoneDownSession? { try file.read() }
