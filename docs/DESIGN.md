@@ -773,3 +773,66 @@ Differences between the signatures above and the code, all additive or naming-le
 - B-M1 was re-measured independently: the sample app's literal gives `supportedModes: 9`; the
   same value through a public constant in `AppInterventionIntents` gives `1`, and
   `scripts/check-intent-metadata.sh` fails on it (exit 1).
+
+## 14. Code review resolution (2026-09-27, reviewers C, D, E)
+
+Findings: `docs/reviews/2026-09-27-code-review.md`. Reviewer C's adversarial tests are in the
+suite (`Tests/*/Adversarial*.swift`); each failed before its fix.
+
+Where this section and the signatures in §2–§7 disagree, this section is current:
+`InterventionHandoff` gained `withdraw(contextID:)` and `changes() -> AsyncStream<HandoffChange>`
+(default: a finished stream); file-store `init(location:)` and `InterventionCoordinator.files`
+do not throw; `InterventionPolicy` has `dayStartOffset`; the coordinator has
+`hostConditionsTimeout`; `HostConditions` is `ClosureHostConditionProvider`; `AppReopener` is not
+class-bound; `InterventionPresenter.proceed` takes `onResolved`.
+
+| ID | Decision | Change |
+|---|---|---|
+| C-M1 | Fixed | `Pass.isInReturnWindow` no longer requires validity; the policy checks the window alone; `Pass.isExpired(at:)` keeps passes whose window is open |
+| C-M2 | Fixed | coordinator `withdraw`s the context on foreground failure; `HandoffChange.withdrawn` drops it from the inbox; `InterventionInbox.current` / presenter enforce `maxAge` (`.expired`) |
+| D-M1 | Fixed | `proceed(optionID:passDuration:onResolved:)` calls `onResolved` before reopening; README documents reconciling from `proceeded` events |
+| C-S1 | Fixed | per-path `SharedFileState` (lock, line count, handoff change stream) shared by all instances; `O_APPEND` |
+| C-S2 / D-S7 | Fixed | `resolve` restores the previous pass when the log append fails |
+| C-S3 / D-S3 | Fixed | `InterventionPolicy.dayStartOffset` passed into `RuleInput.opens` |
+| C-S4 | Fixed | `hostConditionsTimeout` (2 s) → `.failOpen(.timeout)` (not `.empty`: an empty snapshot would make lock rules intervene, i.e. fail closed) |
+| C-S5 / D-S5 | Fixed | `outcomes()` replays the unacknowledged outcome on subscribe |
+| C-S6 / E-S9 | Fixed | sample runs the phone-down controller at the app root and resumes on every `.active` |
+| D-S1 | Fixed | README uses do/catch; README code is compiled in `Examples/…/ReadmeSnippets.swift` |
+| D-S2 | Fixed | lazy, non-throwing `files(at:)`; unusable locations fail open at run time |
+| D-S4 | Fixed | `files(at:)` takes `returnWindow`, `opensLookback`, `hostConditionsTimeout` |
+| D-S6 | Fixed | `Broadcaster` public; default `changes()` |
+| D-S8 | Fixed | `scripts/build-docs.sh`: `xcodebuild docbuild` for iOS, `docc merge`, fails on warnings; workflow uses it |
+| D-S9 | Fixed | output `_site` (gitignored), never `docs/` |
+| D-S10 | Fixed | `InterventionPauseView(subtitle:)` (and `readyAnnouncement:`) |
+| D-S11 | Fixed | README.ja includes `GuardedAppOption`; README snippets compile in the sample |
+| D-S12 | Documented | README/CHANGELOG: 0.x minors may add enum cases, use `default:`; codes and kinds stay open structs |
+| D-S13 | Fixed | script comments in English; README documents `SourcePackages/checkouts/…` and `jq` |
+| C-C1 | Fixed | torn last line terminated before appending |
+| C-C2 | Fixed | wall-clock day boundaries (`bySettingHour`); DST test |
+| C-C3 | Fixed | `resolve` uses `withdraw` (no take-and-put-back) |
+| C-C4 | Fixed | negative durations clamped to zero |
+| D-C1 | Fixed | doc comments on public members (protocol requirements, inits, properties) |
+| D-C2 | Fixed | public inits for `ResolutionReceipt`, `AutomationRunOutcome`, `ProceedResult` (`PhoneDownOutcome` stays internal-init: only sessions produce it; tests use `PhoneDownSession`) |
+| D-C3 | Fixed | `ClosureHostConditionProvider`; `AppReopener` not `AnyObject` |
+| D-C4 | Fixed | `InterventionCoordinator.inMemory(...)` |
+| D-C5 | Fixed | `AutomationRunOutcome.elapsedMilliseconds` |
+| D-C6 | Fixed | VoiceOver announcement when the actions become available |
+| D-C7 | Documented | App Switcher returns re-fire the automation and count (device gate) |
+| E-M1 | Fixed | inbox-inclusive adversarial test (`staleInbox`) |
+| E-M2 | Fixed | `ForegroundModeState`, `InterventionIntentDefaults`; tests for defaults and mapping |
+| E-M3 | Fixed | `Bounded.swift` helpers, `.timeLimit` on every suite, `scripts/check-bounded-awaits.sh` in `make test` |
+| E-S4 | Fixed | exact-boundary tests for M04, M09, M11, M13, M14, M17, M24, M37 |
+| E-S5 | Fixed | 20 concurrent resolutions → 1 success |
+| E-S6 | Fixed | `FailingOpenLogStore`; handoff-failure log contents |
+| E-S7 | Fixed | file-backed E2E across re-created instances; session-file corruption / newer version |
+| E-S8 | Fixed | remaining phone-down transitions and controller lifecycle |
+| E-S10 | Fixed | `DeviceSignal` → `PhoneDownEvent` pure mapping, tested on macOS |
+| E-C11..13 | C11 = C-S3 fixed; C12 fixed (inbox `maxAge`); C13 (UI/localization snapshots) not done — `make qa` screenshots cover the sample visually; String Catalog compiled in the iOS build |
+
+Speed and QA strategy (decided with the review): bounded tests; Makefile budgets (`timed`);
+`make mutants` in a git worktree with a fixed `--scratch-path` and 60 s per mutant; iOS builds
+only for QA; one DerivedData path and destination for the sample (`.mobilebuildmcp/config.yaml`);
+DEBUG-only QA entry points in the sample (launch arguments, `interventionsample://qa/...`, one
+`[QA]` line per action, State tab) and `make qa`. The iOS 26 Simulator asks "Open in …?" for
+every URL sent with `simctl openurl`, which blocks an unattended run, so `make qa` passes the same
+commands with `-qa-script`; the URL scheme stays for manual use.

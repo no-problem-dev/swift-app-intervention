@@ -30,3 +30,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   phone from leaving the app, with `PhoneDownSessionController` and the UIKit event source.
 - `Examples/InterventionSample` and `scripts/check-intent-metadata.sh`, which asserts that the
   sample's intent is extracted with `supportedModes == 9`.
+- Hardening from the first code review, before any release:
+  - The host's own reopen passes through even when the pass lasts zero or a few seconds (the
+    return window no longer depends on the pass being valid, and such passes are not pruned
+    while it is open).
+  - A pause the app could not bring forward is withdrawn (`InterventionHandoff.withdraw(contextID:)`,
+    `HandoffChange`), and pauses older than the inbox's `maxAge` are neither shown nor resolved
+    (`InterventionError.Code.expired`).
+  - `InterventionPresenter.proceed(optionID:passDuration:onResolved:)` calls `onResolved` before
+    the other app is opened, so a ledger write happens while the host is still in front.
+  - A failed log write during `resolve` rolls the pass back; concurrent resolutions of one
+    context record exactly one.
+  - File stores on the same path share one lock and one change stream across instances; the log
+    appends with `O_APPEND` and survives a torn last line. `InterventionCoordinator.files(at:…)`
+    and the file stores' `init(location:)` no longer throw: the location is resolved on first
+    use and failures pass through.
+  - `InterventionPolicy.dayStartOffset` reaches the rules' open counts; day boundaries stay on
+    the wall clock across daylight-saving changes.
+  - Host conditions have a 2-second budget (`hostConditionsTimeout`), after which the run
+    passes through (`InterventionError.Code.timeout`).
+  - `PhoneDownSessionController.outcomes()` replays the unacknowledged outcome to new subscribers.
+  - `DeviceSignal` / `PhoneDownEvent.init(signal:at:)`, `ForegroundModeState` and
+    `InterventionIntentDefaults` expose the mappings the adapters use.
+  - `Broadcaster` is public and `InterventionHandoff.changes()` has a default implementation.
+  - `InterventionCoordinator.inMemory(catalog:policy:)`, public initializers for the result
+    types, `AutomationRunOutcome.elapsedMilliseconds`, `InterventionPauseView(subtitle:readyAnnouncement:)`.
+  - Renamed `HostConditions` to `ClosureHostConditionProvider`; `AppReopener` no longer
+    requires a class.
+- Public enums (`PassThroughReason`, `InterventionReason`, `InterventionDecision`,
+  `PhoneDownEvent`, …) may gain cases in 0.x minor versions; switch over them with a `default:`.

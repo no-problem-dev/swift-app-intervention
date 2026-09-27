@@ -11,11 +11,18 @@ clearest possible report.
 ## Working on a change
 
 ```bash
-make verify   # swift build, swift test, iOS Simulator build, sample app, intent metadata check
+make verify   # build, test, iOS Simulator build, intent metadata check, DocC (no warnings)
+make qa       # scripted simulator pass of the sample app, screenshots in .build/qa-shots
+make mutants  # mutation run in a git worktree of HEAD (commit first)
 ```
 
-Or one step at a time: `make build`, `make test`, `make build-ios`, `make sample`,
-`make check-metadata`. The iOS steps need Xcode 26 or later and XcodeGen.
+Every target prints its time against a budget (`make help`); going over the budget is a bug.
+The iOS steps need Xcode 26 or later, XcodeGen and jq.
+
+Tests never wait unbounded: iterate async sequences only through `collect` / `firstValue` in
+`Tests/*/Bounded.swift`, and give every `@Suite` a `.timeLimit`. `make test` enforces both
+(`scripts/check-bounded-awaits.sh`). When you change code covered by `scripts/mutants.py`,
+update the snippets there; a stale mutant fails the run.
 
 **Verification happens here, not in CI.** The release workflow does not build or
 test — it only turns a tag into a GitHub Release. Run `make verify` locally and

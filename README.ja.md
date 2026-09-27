@@ -16,10 +16,12 @@ Family Controls を使わずに、選んだアプリを開く前に**立ち止�
 1. 利用者がショートカットで個人用オートメーションを作る:
    **「Instagram を開いたとき」→「すぐに実行」→「あなたのアプリ: 開く前に立ち止まる」**（「実行時に通知」はオフ）
 2. 開くたびに、iOS がホストアプリの intent を**ホストアプリのプロセスで、背景で**実行する
-3. コーディネータがパス・最近の開いた記録・ホストの状態を読み、純関数の判定に渡す。ほとんどの実行は画面を出さずに通す
+3. コーディネータが「いまそのアプリを使ってよい状態か」・最近開いた回数・ホストの状態を読み、判定の関数に渡す。
+   ほとんどの実行は画面を出さずに通す
 4. 止めるときだけ intent が `continueInForeground` を呼び、立ち止まり画面が出る
-5. 利用者が「開く」を選ぶと、パッケージが**パス**を発行して Instagram を開き直す。開き直しで自動化はもう一度動くが、
-   パスがあるので通し、新しく開いた回数にも数えない
+5. 利用者が「開く」を選ぶと、パッケージは**そのアプリを決めた時間だけ使ってよい状態**（コード上は `Pass`）にしてから、
+   Instagram を開き直す。開き直しで自動化はもう一度動くが、開き直した直後の数秒（既定 15 秒）の実行は
+   立ち止まらせず、開いた回数にも数えない
 
 ## 設計
 
@@ -30,13 +32,15 @@ Family Controls を使わずに、選んだアプリを開く前に**立ち止�
 | **`AppInterventionUI`** | 立ち止まり画面・オートメーション設定ガイド・回数の要約 | SwiftUI, Charts |
 | **`AppInterventionFocus`** | ロックとアプリ離脱を見分ける「スマホを置く」セッション | UIKit, CallKit（iOS） |
 
-- **判定の順番:** 戻り窓 → パスより強いロック → 有効なパス → ホストのルール（順に） → 既定。
-  ルールは純関数で、最近の開いた記録と、`HostConditionProvider` が 1 回の実行につき 1 度だけ取る `HostSnapshot` を読む
-- **失敗したら通す:** 自動化から呼ばれる処理は例外を投げない。保存に失敗しても、前面に出られなくても通す。利用者を閉じ込めない
-- **1 回だけ:** `resolve` は 1 つの介入につき 1 回だけ記録する（2 回目は `alreadyResolved`）。
+- **判定の順番:** 開き直した直後の数秒 → 使ってよい状態より強いロック → 使ってよい状態 → ホストのルール（順に） → 既定。
+  ルールは副作用のない関数で、最近の開いた記録と、`HostConditionProvider` が 1 回の実行につき 1 度だけ取る `HostSnapshot` を読む
+- **失敗したら通す:** 自動化から呼ばれる処理は例外を投げない。保存に失敗しても、前面に出られなくても、
+  ホストの状態が 2 秒以内に返らなくても通す。利用者を閉じ込めない
+- **1 回だけ:** `resolve` は 1 つの介入につき 1 回だけ記録する（2 回目は、同時に押されても `alreadyResolved`）。
   ホストの台帳の冪等キーには `InterventionContext.id` を使う。パッケージはお金を知らない
-- **保存:** バージョン付きの小さな JSON（新しいバージョンのファイルは上書きしない・読めないファイルは退避する）と、追記専用の JSONL の記録
-  （知らない種類の行は読み飛ばし、圧縮でも残す）
+- **古い画面を出さない:** 前面に出られなかった介入は取り下げ、2 分より古い介入は表示も解決もしない
+- **保存:** バージョン付きの小さな JSON（新しいバージョンのファイルは上書きしない・読めないファイルは退避する）と、
+  追記専用の JSONL の記録（知らない種類の行は読み飛ばし、圧縮でも残す）
 
 ## 組み込み方
 
@@ -67,9 +71,23 @@ struct PauseBeforeOpeningIntent: AppIntent {
         return .result()
     }
 }
+
+enum GuardedAppOption: String, AppEnum {
+    case instagram, youtube
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "App"
+    static let caseDisplayRepresentations: [GuardedAppOption: DisplayRepresentation] = [
+        .instagram: "Instagram", .youtube: "YouTube",
+    ]
+}
 ```
 
-ホストのビルド時の確認に `scripts/check-intent-metadata.sh --app <YourApp.app> --intent PauseBeforeOpeningIntent` を入れる。
+ホストのビルド時の確認に、メタデータの確認スクリプトを入れる（`jq` が必要）。Xcode でパッケージを解決していれば、
+スクリプトは `<DerivedData>/<Project>/SourcePackages/checkouts/swift-app-intervention/scripts/check-intent-metadata.sh` にある
+（リポジトリに写してもよい）。
+
+```sh
+check-intent-metadata.sh --app "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME" --intent PauseBeforeOpeningIntent
+```
 
 ### 2. 軽いコーディネータ
 
@@ -82,17 +100,21 @@ enum Intervention {
         GuardedApp(id: "instagram", displayName: "Instagram",
                    reopenURLs: [URL(string: "instagram://")!, URL(string: "https://www.instagram.com")!]),
     ]
-    static let coordinator = try! InterventionCoordinator.files(
+    // 例外を投げない。保存先が使えなければ、intent のプロセスを落とさずに通す
+    static let coordinator = InterventionCoordinator.files(
         at: .applicationSupport,               // ウィジェットも読むときだけ .appGroup("group.…")
         catalog: StaticGuardedAppCatalog(apps),
         policy: {
-            InterventionPolicy(rules: [
-                LockRule(id: "habits") { $0.host.contains("habits-done") ? nil : LockReason(id: "habits") },
-                ScheduleRule(id: "night", window: DailyWindow(start: .init(hour: 22), end: .init(hour: 2)),
-                             effect: .intervene("strict")),
-            ])
+            InterventionPolicy(
+                rules: [
+                    LockRule(id: "habits") { $0.host.contains("habits-done") ? nil : LockReason(id: "habits") },
+                    ScheduleRule(id: "night", window: DailyWindow(start: .init(hour: 22), end: .init(hour: 2)),
+                                 effect: .intervene("strict")),
+                ],
+                dayStartOffset: .seconds(4 * 3_600)   // 「今日」を 4 時で区切る（アプリの 1 日に合わせる）
+            )
         },
-        hostConditions: HostConditions { _, _ in await HabitStore.snapshot() }
+        hostConditions: ClosureHostConditionProvider { _, _ in await HabitStore.snapshot() }
     )
 }
 ```
@@ -122,17 +144,29 @@ InterventionPauseView(context: context) {
 } actions: {
     InterventionActionButton(Text("50 払って 15 分使う")) {
         Task {
-            let result = try await presenter.proceed(optionID: "pay-50", passDuration: .seconds(900))
-            ledger.charge(50, idempotencyKey: result.receipt.contextID)
+            do {
+                let result = try await presenter.proceed(optionID: "pay-50", passDuration: .seconds(900)) { receipt in
+                    // 別のアプリが前面に出る前に呼ばれる（出た後はこのプロセスが止まることがある）
+                    ledger.charge(50, idempotencyKey: receipt.contextID)
+                }
+                if case .reopened = result.reopen {} else { showSwitchBackHint() }
+            } catch {
+                showError(error)   // .alreadyResolved・.expired・保存の失敗
+            }
         }
     }
     InterventionActionButton(Text("やめて 50 貯める"), prominence: .secondary) {
-        if let receipt = try? presenter.abandon(optionID: "skip") {
+        do {
+            let receipt = try presenter.abandon(optionID: "skip")
             ledger.reward(50, idempotencyKey: receipt.contextID)
+        } catch {
+            showError(error)
         }
     }
 }
 ```
+
+記録してから台帳に書くまでの間にプロセスが終わった場合は、`proceeded` / `abandoned` の記録を `contextID` で突き合わせて台帳を直す。
 
 完全な見本は `Examples/InterventionSample`（XcodeGen・iOS 26）。
 
@@ -145,13 +179,14 @@ InterventionPauseView(context: context) {
 
 ```swift
 let controller = PhoneDownSessionController(
-    store: try FilePhoneDownSessionStore(location: .applicationSupport),
+    store: FilePhoneDownSessionStore(location: .applicationSupport),
     guardedOpens: CoordinatorGuardedOpenSource(Intervention.coordinator)
 )
 try controller.start(duration: .seconds(3_600))
-// .task { controller.resume(appIsActive: true) }
+// アプリのルートに置く（タブの中に置くと、別のタブを表示している間イベントを取りこぼす）:
 // .task { await controller.run(events: UIKitPhoneDownEventSource()) }
-// for await outcome in controller.outcomes() { reward(idempotencyKey: outcome.sessionID) }
+// .onChange(of: scenePhase) { if $1 == .active { controller.resume(appIsActive: true) } }
+// .task { for await outcome in controller.outcomes() { reward(idempotencyKey: outcome.sessionID) } }
 ```
 
 セッション中にガード対象のアプリが開かれたら即失敗にする（intent はホストのプロセスで実行されるので確実）。
@@ -164,15 +199,21 @@ try controller.start(duration: .seconds(3_600))
   何日も記録が無いときに `OpenLogQuery.lastRun` を見て確認を出す
 - 「実行時に通知」をオフにしない限り、自動化が動くたびに iOS がバナーを出す
 - 前面に出る前に、ガード対象のアプリが一瞬見えることがある
-- **パスが切れても利用者を追い出せない。** 判定するのは次に開いたときだけ
+- **使ってよい時間が切れても、利用者を追い出せない。** 判定するのは次に開いたときだけ
+- App スイッチャーからガード対象のアプリに戻っても自動化が動き、開いた回数に数える（実機で確認する項目）
 - 開き直しは他社アプリの URL スキームに頼る（公開されていない）。ユニバーサルリンクを予備に並べ、
   何も開けなければ自分で戻るよう伝える
 - スマホを置くセッション: ロックの通知はパスコードが要り、遅れて届くことがある。アプリが停止した後は何も観測できない
 - 実機でしか確認できないこと: 自動化から確認なしで前面に出られるか、コールドスタートの遅さ、
-  15 秒の戻り窓で開き直しが通るか、保護データの通知のタイミング、「実行時に通知」オフでのバナー
+  開き直した直後の 15 秒で足りるか、保護データの通知のタイミング、「実行時に通知」オフでのバナー
 
 審査メモには設定手順と短い動画を付け、「払う」のはアプリ内ポイントで本物のお金ではないことを明記する。
 このパッケージは公開 API しか使わない。
+
+## バージョン
+
+0.x のマイナーでは、公開 enum（`PassThroughReason`・`InterventionReason`・`InterventionDecision`・`PhoneDownEvent` など）に
+ケースが増えることがある。`switch` には `default:` を書いておく。エラーコードと記録の種類は struct なので、増えても `switch` は通る。
 
 ## ドキュメント
 

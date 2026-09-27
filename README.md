@@ -37,8 +37,10 @@ in the background, whether to step in, and brings your pause screen forward only
 - **Fail open:** the automation path never throws. If storage fails, or the app cannot come
   forward, the open passes through — the user is never trapped.
 - **Exactly once:** `resolve` records each intervention once (`alreadyResolved` on a second
-  try). Use `InterventionContext.id` as the idempotency key in your ledger; the package knows
-  nothing about money.
+  try, even from concurrent taps). Use `InterventionContext.id` as the idempotency key in your
+  ledger; the package knows nothing about money.
+- **Never stale:** a pause the app could not bring forward is withdrawn, and pauses older than
+  two minutes are never shown or resolved.
 - **Storage:** small JSON files with a format version (newer files are never overwritten,
   corrupt ones are moved aside) and an append-only JSONL open log that skips — and keeps —
   event kinds it does not know.
@@ -84,8 +86,13 @@ enum GuardedAppOption: String, AppEnum {
 }
 ```
 
-Add `scripts/check-intent-metadata.sh --app <YourApp.app> --intent PauseBeforeOpeningIntent`
-to your build checks.
+Add the metadata check to your build checks. It needs `jq`. With the package resolved by Xcode,
+the script is at `<DerivedData>/<Project>/SourcePackages/checkouts/swift-app-intervention/scripts/check-intent-metadata.sh`
+(or copy it into your repository):
+
+```sh
+check-intent-metadata.sh --app "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME" --intent PauseBeforeOpeningIntent
+```
 
 ### 2. A lightweight coordinator
 
@@ -98,17 +105,21 @@ enum Intervention {
         GuardedApp(id: "instagram", displayName: "Instagram",
                    reopenURLs: [URL(string: "instagram://")!, URL(string: "https://www.instagram.com")!]),
     ]
-    static let coordinator = try! InterventionCoordinator.files(
+    // Never throws: an unusable location makes runs pass through instead of crashing the intent.
+    static let coordinator = InterventionCoordinator.files(
         at: .applicationSupport,               // .appGroup("group.…") only if a widget reads the data
         catalog: StaticGuardedAppCatalog(apps),
         policy: {
-            InterventionPolicy(rules: [
-                LockRule(id: "habits") { $0.host.contains("habits-done") ? nil : LockReason(id: "habits") },
-                ScheduleRule(id: "night", window: DailyWindow(start: .init(hour: 22), end: .init(hour: 2)),
-                             effect: .intervene("strict")),
-            ])
+            InterventionPolicy(
+                rules: [
+                    LockRule(id: "habits") { $0.host.contains("habits-done") ? nil : LockReason(id: "habits") },
+                    ScheduleRule(id: "night", window: DailyWindow(start: .init(hour: 22), end: .init(hour: 2)),
+                                 effect: .intervene("strict")),
+                ],
+                dayStartOffset: .seconds(4 * 3_600)   // "today" starts at 04:00, as in your app
+            )
         },
-        hostConditions: HostConditions { _, _ in await HabitStore.snapshot() }
+        hostConditions: ClosureHostConditionProvider { _, _ in await HabitStore.snapshot() }
     )
 }
 ```
@@ -138,17 +149,30 @@ InterventionPauseView(context: context) {
 } actions: {
     InterventionActionButton(Text("Pay 50 and open for 15 min")) {
         Task {
-            let result = try await presenter.proceed(optionID: "pay-50", passDuration: .seconds(900))
-            ledger.charge(50, idempotencyKey: result.receipt.contextID)
+            do {
+                let result = try await presenter.proceed(optionID: "pay-50", passDuration: .seconds(900)) { receipt in
+                    // Runs before the other app comes forward (this process may be suspended then).
+                    ledger.charge(50, idempotencyKey: receipt.contextID)
+                }
+                if case .reopened = result.reopen {} else { showSwitchBackHint() }
+            } catch {
+                showError(error)   // .alreadyResolved, .expired, or a storage failure
+            }
         }
     }
     InterventionActionButton(Text("Skip and save 50"), prominence: .secondary) {
-        if let receipt = try? presenter.abandon(optionID: "skip") {
+        do {
+            let receipt = try presenter.abandon(optionID: "skip")
             ledger.reward(50, idempotencyKey: receipt.contextID)
+        } catch {
+            showError(error)
         }
     }
 }
 ```
+
+If the process dies between recording and booking anyway, reconcile the ledger from
+`proceeded` / `abandoned` events by `contextID`.
 
 `Examples/InterventionSample` is a complete host app (XcodeGen, iOS 26).
 
@@ -162,13 +186,14 @@ This is where most users drop off; put your best illustration above it.
 
 ```swift
 let controller = PhoneDownSessionController(
-    store: try FilePhoneDownSessionStore(location: .applicationSupport),
+    store: FilePhoneDownSessionStore(location: .applicationSupport),
     guardedOpens: CoordinatorGuardedOpenSource(Intervention.coordinator)
 )
 try controller.start(duration: .seconds(3_600))
-// .task { controller.resume(appIsActive: true) }
+// At the app root (not inside a tab), so events keep flowing whichever screen is shown:
 // .task { await controller.run(events: UIKitPhoneDownEventSource()) }
-// for await outcome in controller.outcomes() { reward(idempotencyKey: outcome.sessionID) }
+// .onChange(of: scenePhase) { if $1 == .active { controller.resume(appIsActive: true) } }
+// .task { for await outcome in controller.outcomes() { reward(idempotencyKey: outcome.sessionID) } }
 ```
 
 A guarded app opening during the session fails it immediately (reliable: your intent runs in
@@ -183,6 +208,8 @@ confirmed is judged by `unconfirmedAbsence` (`.fail` by default; consider `.tole
 - iOS shows a banner each time the automation runs unless the user turns off *Notify When Run*.
 - The guarded app may be visible for a moment before yours comes forward.
 - **Pass expiry cannot kick the user out**; only the next open is evaluated.
+- Returning to a guarded app from the App Switcher fires the automation again, and that counts
+  as an open (device-gate item to confirm).
 - Reopening relies on third-party URL schemes, which are undocumented. List a universal link as
   a fallback; if nothing opens, ask the user to switch back.
 - Phone-down: lock signals need a passcode and can be late; nothing is observable after the
@@ -193,6 +220,12 @@ confirmed is judged by `unconfirmedAbsence` (`.fail` by default; consider `.tole
 
 For App Review, include the setup steps and a short video in the review notes, and make clear
 that "paying" uses in-app points, not money. The package uses public API only.
+
+## Versioning
+
+0.x minors may add cases to public enums (`PassThroughReason`, `InterventionReason`,
+`InterventionDecision`, `PhoneDownEvent`, …). Give your `switch`es a `default:` branch.
+Error codes and event kinds are open structs and never break a `switch`.
 
 ## Documentation
 
