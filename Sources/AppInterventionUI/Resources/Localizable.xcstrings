@@ -1,1 +1,254 @@
-{"sourceLanguage":"en","strings":{},"version":"1.0"}
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Before you open %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ を開く前に"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 %@ 之前"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開 %@ 之前"
+          }
+        }
+      }
+    },
+    "Choose the apps to pause before, select Is Opened, and choose Run Immediately.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立ち止まりたい App を選び、「開いている」と「すぐに実行」を選びます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择要在打开前暂停的 App，勾选“已打开”，并选择“立即运行”。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇要在打開前暫停的 App，勾選「已打開」，並選擇「立即執行」。"
+          }
+        }
+      }
+    },
+    "If Notify When Run stays on, iOS shows a small banner each time the automation runs. That is expected.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「実行時に通知」がオンのままだと、オートメーションが動くたびに iOS が小さなバナーを出します。これは正常な動作です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果“运行时通知”保持开启，每次自动化运行时 iOS 都会显示一条小横幅。这是正常现象。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果「執行時通知」保持開啟，每次自動化執行時 iOS 都會顯示一個小橫幅。這是正常現象。"
+          }
+        }
+      }
+    },
+    "Open Shortcuts": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカットを開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开快捷指令"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開捷徑"
+          }
+        }
+      }
+    },
+    "Open the Shortcuts app and go to the Automation tab.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカット App を開き、「オートメーション」タブに移動します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开“快捷指令” App，前往“自动化”标签。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開「捷徑」App，前往「自動化」標籤頁。"
+          }
+        }
+      }
+    },
+    "Opens by hour": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "時間帯ごとの回数"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按小时统计的打开次数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按小時統計的打開次數"
+          }
+        }
+      }
+    },
+    "Opens today": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日開いた回数"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今天打开次数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今天打開次數"
+          }
+        }
+      }
+    },
+    "Take a moment.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ひと呼吸おきましょう。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先停一下。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先停一下。"
+          }
+        }
+      }
+    },
+    "Tap + and choose App.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "＋ をタップし、「App」を選びます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻点 +，然后选择“App”。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點一下 +，然後選擇「App」。"
+          }
+        }
+      }
+    },
+    "Tap Next, then add the “%@” action from %@.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap Next, then add the “%1$@” action from %2$@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「次へ」をタップし、%2$@ の「%1$@」アクションを追加します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻点“下一步”，然后添加 %2$@ 的“%1$@”操作。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點一下「下一步」，然後加入 %2$@ 的「%1$@」動作。"
+          }
+        }
+      }
+    },
+    "Turn off Notify When Run.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「実行時に通知」をオフにします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭“运行时通知”。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關閉「執行時通知」。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
