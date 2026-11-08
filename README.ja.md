@@ -236,7 +236,7 @@ info:
 
 ## ドキュメント
 
-API リファレンス: [no-problem-dev.github.io/swift-app-intervention](https://no-problem-dev.github.io/swift-app-intervention/documentation/)。
+API リファレンス: [`Sources/`](Sources) の各モジュールにある DocC カタログ（`make docs` でビルドできる）。
 設計と、それが受けたレビュー: [`docs/DESIGN.md`](docs/DESIGN.md)。
 
 ## インストール

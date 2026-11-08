@@ -249,7 +249,7 @@ Error codes and event kinds are open structs and never break a `switch`.
 
 ## Documentation
 
-API reference: [no-problem-dev.github.io/swift-app-intervention](https://no-problem-dev.github.io/swift-app-intervention/documentation/).
+API reference: the DocC catalog in each module under [`Sources/`](Sources) (`make docs` builds it).
 Design notes and the review they went through: [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Installation
