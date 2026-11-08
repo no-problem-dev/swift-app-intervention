@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds the DocC site for GitHub Pages into ./_site (never ./docs: that folder holds the design
-# notes and reviews, which must not be published).
+# Builds the merged DocC site into ./_site for local reading (never ./docs: that folder holds the
+# design notes and reviews).
 #
 # Built with `xcodebuild docbuild` for iOS rather than `swift package generate-documentation`
 # on macOS, because a macOS build drops the iOS-only API (SystemAppReopener,

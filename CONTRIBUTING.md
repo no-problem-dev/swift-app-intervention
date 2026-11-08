@@ -24,9 +24,8 @@ Tests never wait unbounded: iterate async sequences only through `collect` / `fi
 (`scripts/check-bounded-awaits.sh`). When you change code covered by `scripts/mutants.py`,
 update the snippets there; a stale mutant fails the run.
 
-**Verification happens here, not in CI.** The release workflow does not build or
-test — it only turns a tag into a GitHub Release. Run `make verify` locally and
-make sure it passes before opening a pull request.
+**There is no CI.** Run `make verify` locally and make sure it passes before
+opening a pull request.
 
 Anything that depends on a real device — the automation actually firing, the app
 coming to the foreground, lock signals — is listed in `docs/DESIGN.md` §10 and
@@ -37,16 +36,15 @@ declarations are documented with `///` comments, in English.
 
 ## Releasing
 
-Maintainers only. The version is **computed, never chosen**:
+Maintainers only.
 
-```bash
-scripts/release.sh --dry-run   # see what version the API diff implies
-scripts/release.sh             # stamp CHANGELOG, tag, push
-```
+1. In `CHANGELOG.md`, turn `## [Unreleased]` into `## [x.y.z] - YYYY-MM-DD` and
+   merge that to `main`.
+2. Tag the merge and push the tag:
 
-Write what changed under `## [Unreleased]` in `CHANGELOG.md` — prose only, no
-version number. `scripts/release.sh` compares the public API against the last
-release and derives the version from the actual difference: a removed or changed
-public symbol means a major, additions mean a minor, and a change in the
-generation of a dependency whose types appear in this package's public API also
-means a major.
+   ```bash
+   git tag x.y.z && git push origin x.y.z
+   ```
+
+Versions follow [SemVer](https://semver.org) with bare tags (`1.2.3`, no `v`).
+While the major version is 0, a breaking change bumps the minor version.
