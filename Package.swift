@@ -6,8 +6,8 @@ let package = Package(
     name: "AppIntervention",
     defaultLocalization: "en",
     platforms: [
-        // iOS is the product. macOS exists so the core runs under `swift test` on the host and
-        // DocC builds with the standard workflow; UIKit-only code is behind `#if os(iOS)`.
+        // iOS is the product. macOS exists so the core runs under `swift test` on the host;
+        // UIKit-only code is behind `#if os(iOS)`.
         .iOS(.v26),
         .macOS(.v26)
     ],
@@ -20,9 +20,6 @@ let package = Package(
         .library(name: "AppInterventionUI", targets: ["AppInterventionUI"]),
         // "Put the phone down" sessions: pure state machine + UIKit event source.
         .library(name: "AppInterventionFocus", targets: ["AppInterventionFocus"])
-    ],
-    dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-docc-plugin", .upToNextMajor(from: "1.4.0"))
     ],
     targets: [
         // MARK: - Core (no framework beyond Foundation)
